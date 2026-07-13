@@ -72,7 +72,7 @@ function Settings() {
                             { label: "System", value: "Inventory Management ERP" },
                             { label: "Backend", value: "Node.js + Express + PostgreSQL" },
                             { label: "Frontend", value: "React 18 + Vite" },
-                            { label: "API Base URL", value: "http://localhost:3000/api" },
+                            { label: "API Base URL", value: "http://200.97.166.234:3000/api" },
                         ].map((info) => (
                             <div key={info.label} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                                 <span style={{ minWidth: "140px", fontSize: "13px", color: "#64748b", fontWeight: 600 }}>{info.label}:</span>

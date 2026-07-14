@@ -4,7 +4,7 @@ import { getWarehouses } from "../services/warehouseService";
 import "../css/admin.css";
 import "../css/dashboard.css";
 
-const newRow = () => ({ id: Date.now() + Math.random(), product_id: "", boxes: "" });
+const newRow = () => ({ id: Date.now() + Math.random(), product_id: "", boxes: "", pieces: "" });
 
 function StockEntry() {
     const [user, setUser] = useState(null);
@@ -43,15 +43,46 @@ function StockEntry() {
 
     const getProduct = (pid) => products.find(p => p.id === parseInt(pid));
 
-    const calcPieces = (pid, boxes) => {
-        const p = getProduct(pid);
-        return p && boxes ? parseInt(boxes) * p.pieces_per_box : 0;
-    };
-
     const handleRowChange = (rowId, field, value) => {
-        setRows(prev => prev.map(r =>
-            r.id === rowId ? { ...r, [field]: value } : r
-        ));
+        setRows(prev => prev.map(r => {
+            if (r.id !== rowId) return r;
+
+            const updated = { ...r, [field]: value };
+            const p = getProduct(updated.product_id);
+
+            if (p) {
+                if (field === "product_id") {
+                    // Recalculate based on existing boxes or pieces when product changes
+                    if (updated.boxes) {
+                        const parsedVal = parseFloat(updated.boxes);
+                        updated.pieces = isNaN(parsedVal) ? "" : String(Math.round(parsedVal * p.pieces_per_box));
+                    } else if (updated.pieces) {
+                        const parsedVal = parseInt(updated.pieces);
+                        updated.boxes = isNaN(parsedVal) ? "" : String(parseFloat((parsedVal / p.pieces_per_box).toFixed(4)));
+                    }
+                } else if (field === "boxes") {
+                    if (value === "") {
+                        updated.pieces = "";
+                    } else {
+                        const parsedVal = parseFloat(value);
+                        updated.pieces = isNaN(parsedVal) ? "" : String(Math.round(parsedVal * p.pieces_per_box));
+                    }
+                } else if (field === "pieces") {
+                    if (value === "") {
+                        updated.boxes = "";
+                    } else {
+                        const parsedVal = parseInt(value);
+                        updated.boxes = isNaN(parsedVal) ? "" : String(parseFloat((parsedVal / p.pieces_per_box).toFixed(4)));
+                    }
+                }
+            } else {
+                if (field === "product_id") {
+                    updated.boxes = "";
+                    updated.pieces = "";
+                }
+            }
+            return updated;
+        }));
     };
 
     const addRow = () => setRows(prev => [...prev, newRow()]);
@@ -60,13 +91,13 @@ function StockEntry() {
         if (rows.length > 1) setRows(prev => prev.filter(r => r.id !== rowId));
     };
 
-    const totalBoxes = rows.reduce((s, r) => s + (parseInt(r.boxes) || 0), 0);
-    const totalPieces = rows.reduce((s, r) => s + calcPieces(r.product_id, r.boxes), 0);
+    const totalBoxes = parseFloat(rows.reduce((s, r) => s + (parseFloat(r.boxes) || 0), 0).toFixed(4));
+    const totalPieces = rows.reduce((s, r) => s + (parseInt(r.pieces) || 0), 0);
 
     const handleSubmit = async () => {
         if (!warehouseId) { setError("Please select a warehouse."); return; }
-        const valid = rows.filter(r => r.product_id && parseInt(r.boxes) > 0);
-        if (valid.length === 0) { setError("Add at least one product with boxes > 0."); return; }
+        const valid = rows.filter(r => r.product_id && parseInt(r.pieces) > 0);
+        if (valid.length === 0) { setError("Add at least one product with pieces > 0."); return; }
 
         try {
             setSubmitting(true);
@@ -75,8 +106,8 @@ function StockEntry() {
                 await API.post("/inventory/stock-entry", {
                     warehouse_id: parseInt(warehouseId),
                     product_id: parseInt(row.product_id),
-                    boxes: parseInt(row.boxes),
-                    quantity: calcPieces(row.product_id, row.boxes)
+                    boxes: parseFloat(row.boxes) || 0,
+                    quantity: parseInt(row.pieces) || 0
                 });
             }
             setSuccess(`Stock saved for ${valid.length} product(s) — ${totalBoxes} boxes / ${totalPieces} pieces.`);
@@ -139,7 +170,6 @@ function StockEntry() {
                     <tbody>
                         {rows.map((row, index) => {
                             const prod = getProduct(row.product_id);
-                            const pieces = calcPieces(row.product_id, row.boxes);
                             return (
                                 <tr key={row.id}>
                                     <td style={{ color: "#94a3b8", textAlign: "center", fontWeight: 500 }}>{index + 1}</td>
@@ -159,24 +189,48 @@ function StockEntry() {
                                     <td>
                                         <input
                                             type="number"
-                                            min="1"
+                                            min="0"
+                                            step="any"
                                             value={row.boxes}
                                             onChange={e => handleRowChange(row.id, "boxes", e.target.value)}
                                             className="form-input"
                                             style={{ margin: 0, width: "100%", textAlign: "center" }}
-                                            placeholder="0"
+                                            placeholder="0.00"
                                         />
                                     </td>
-                                    <td style={{ textAlign: "center" }}>
+                                    <td>
                                         <div style={{
-                                            padding: "8px 12px",
-                                            background: pieces > 0 ? "#f0fdf4" : "#f8fafc",
+                                            padding: "6px 10px",
+                                            background: row.pieces > 0 ? "#f0fdf4" : "#f8fafc",
                                             borderRadius: "6px",
-                                            border: `1px solid ${pieces > 0 ? "#bbf7d0" : "#e2e8f0"}`
+                                            border: `1px solid ${row.pieces > 0 ? "#bbf7d0" : "#e2e8f0"}`,
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            alignItems: "center",
+                                            gap: "2px"
                                         }}>
-                                            <div style={{ fontSize: "18px", fontWeight: 700, color: pieces > 0 ? "#16a34a" : "#94a3b8" }}>
-                                                {pieces}
-                                            </div>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={row.pieces}
+                                                onChange={e => handleRowChange(row.id, "pieces", e.target.value)}
+                                                className="form-input"
+                                                style={{
+                                                    margin: 0,
+                                                    width: "100%",
+                                                    textAlign: "center",
+                                                    fontSize: "18px",
+                                                    fontWeight: 700,
+                                                    color: row.pieces > 0 ? "#16a34a" : "#94a3b8",
+                                                    background: "transparent",
+                                                    border: "none",
+                                                    outline: "none",
+                                                    padding: 0,
+                                                    boxShadow: "none"
+                                                }}
+                                                placeholder="0"
+                                            />
                                             {prod && (
                                                 <div style={{ fontSize: "11px", color: "#94a3b8" }}>
                                                     {prod.pieces_per_box} pcs/box

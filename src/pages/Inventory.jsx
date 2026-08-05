@@ -266,7 +266,7 @@ function Inventory() {
             )}
 
             {/* === SHIFT STOCK TAB === */}
-            {activeTab === "shift" && isAdmin && (
+            {activeTab === "shift" && (
                 <div className="section" style={{ marginTop: 0 }}>
                     <div style={{
                         background: "linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%)",

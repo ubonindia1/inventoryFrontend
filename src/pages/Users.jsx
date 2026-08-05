@@ -22,8 +22,10 @@ function Users() {
         warehouse_id: "",
         can_upload_po: false,
         can_download_reports: false,
-        can_manage_products: false
+        can_manage_products: false,
+        inventory_warehouse_access: []
     });
+
 
     // Reset Password Modal
     const [showResetModal, setShowResetModal] = useState(false);
@@ -62,7 +64,8 @@ function Users() {
             warehouse_id: warehouses.find(w => w.is_active)?.id || "",
             can_upload_po: false,
             can_download_reports: false,
-            can_manage_products: false
+            can_manage_products: false,
+            inventory_warehouse_access: []
         });
         setError("");
         setSuccess("");
@@ -79,7 +82,8 @@ function Users() {
             warehouse_id: user.warehouse_id || "",
             can_upload_po: user.can_upload_po || false,
             can_download_reports: user.can_download_reports || false,
-            can_manage_products: user.can_manage_products || false
+            can_manage_products: user.can_manage_products || false,
+            inventory_warehouse_access: user.inventory_warehouse_access || []
         });
         setError("");
         setSuccess("");
@@ -104,8 +108,19 @@ function Users() {
                 warehouse_id: "",
                 can_upload_po: true,
                 can_download_reports: true,
-                can_manage_products: true
+                can_manage_products: true,
+                inventory_warehouse_access: []
             }));
+        } else if (name === "inventory_warehouse_access") {
+            // Toggle warehouse ID in the array
+            const warehouseId = parseInt(value);
+            setFormData((prev) => {
+                const current = prev.inventory_warehouse_access || [];
+                const next = current.includes(warehouseId)
+                    ? current.filter(id => id !== warehouseId)
+                    : [...current, warehouseId];
+                return { ...prev, inventory_warehouse_access: next };
+            });
         } else {
             setFormData((prev) => ({
                 ...prev,
@@ -131,6 +146,7 @@ function Users() {
             return;
         }
 
+        const { inventory_warehouse_access } = formData;
         const payload = {
             full_name,
             username,
@@ -139,6 +155,7 @@ function Users() {
             can_upload_po,
             can_download_reports,
             can_manage_products,
+            inventory_warehouse_access: role === "ADMIN" ? [] : (inventory_warehouse_access || []),
             is_active: currentUser ? currentUser.is_active : true
         };
 
@@ -210,10 +227,19 @@ function Users() {
         
         const list = [];
         if (u.can_upload_po) list.push("Upload PO");
-        if (u.can_download_reports) list.push("Download Reports");
-        if (u.can_manage_products) list.push("Manage Products");
+        if (u.can_download_reports) list.push("Reports");
+        if (u.can_manage_products) list.push("Products");
 
-        return list.length === 0 ? "No special permissions" : list.join(", ");
+        const invAccess = u.inventory_warehouse_access;
+        if (invAccess && invAccess.length > 0) {
+            const wNames = invAccess.map(id => {
+                const w = warehouses.find(wh => wh.id === id);
+                return w ? w.warehouse_name : `#${id}`;
+            }).join(", ");
+            list.push(`Inventory: ${wNames}`);
+        }
+
+        return list.length === 0 ? "No special permissions" : list.join(" · ");
     };
 
     return (
@@ -430,6 +456,37 @@ function Users() {
                                     </div>
                                 </div>
                             )}
+
+                            {formData.role !== "ADMIN" && (
+                                <div className="form-group">
+                                    <label style={{ marginBottom: "8px" }}>
+                                        📦 Inventory View Access
+                                        <span style={{ fontWeight: 400, color: "#94a3b8", marginLeft: "6px", fontSize: "12px" }}>
+                                            (Select warehouses this user can view in Inventory)
+                                        </span>
+                                    </label>
+                                    {warehouses.filter(w => w.is_active).length === 0 ? (
+                                        <p style={{ fontSize: "13px", color: "#94a3b8" }}>No active warehouses.</p>
+                                    ) : (
+                                        <div className="checkbox-group">
+                                            {warehouses.filter(w => w.is_active).map(w => (
+                                                <label key={w.id} className="checkbox-label" style={{ border: (formData.inventory_warehouse_access || []).includes(w.id) ? "1px solid #818cf8" : "1px solid #e2e8f0", background: (formData.inventory_warehouse_access || []).includes(w.id) ? "#eef2ff" : "#f8fafc" }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        name="inventory_warehouse_access"
+                                                        value={w.id}
+                                                        checked={(formData.inventory_warehouse_access || []).includes(w.id)}
+                                                        onChange={handleFormChange}
+                                                    />
+                                                    {w.warehouse_name} ({w.warehouse_code})
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+
 
                             <div className="modal-footer">
                                 <button

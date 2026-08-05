@@ -10,6 +10,16 @@ export const saveStockEntry = async (entryData) => {
     return API.post("/inventory/stock-entry", entryData);
 };
 
+// Shift stock from one warehouse to another
+export const shiftStock = async (shiftData) => {
+    return API.post("/inventory/shift-stock", shiftData);
+};
+
+// Mark ready-to-move stock as dispatched
+export const markDispatched = async (dispatchData) => {
+    return API.post("/inventory/mark-dispatched", dispatchData);
+};
+
 // Get current user's own stock transaction history
 export const getMyHistory = async () => {
     return API.get("/inventory/my-history");

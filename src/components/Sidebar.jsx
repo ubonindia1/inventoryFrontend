@@ -24,17 +24,19 @@ function Sidebar() {
             case "STAFF": {
                 const items = [
                     { path: "/dashboard", label: "Dashboard" },
+                    { path: "/inventory", label: "Inventory" },
                     { path: "/stock-entry", label: "Stock Entry" },
                     { path: "/my-history", label: "My History" }
                 ];
                 if (user?.can_upload_po) {
-                    items.splice(2, 0, { path: "/purchase-orders", label: "Purchase Orders" });
+                    items.splice(3, 0, { path: "/purchase-orders", label: "Purchase Orders" });
                 }
                 return items;
             }
             case "PO_OPERATOR":
                 return [
                     { path: "/dashboard", label: "Dashboard" },
+                    { path: "/inventory", label: "Inventory" },
                     { path: "/purchase-orders", label: "Purchase Orders" },
                     { path: "/po-history", label: "PO History" },
                     { path: "/reports", label: "Reports" }

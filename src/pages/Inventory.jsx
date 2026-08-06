@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getWarehouseInventory, shiftStock } from "../services/inventoryService";
+import { getWarehouseInventory, shiftStock, updateStockQuantity } from "../services/inventoryService";
 import { getWarehouses } from "../services/warehouseService";
 import "../css/admin.css";
 import "../css/dashboard.css";
@@ -12,7 +12,18 @@ function Inventory() {
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
     const [activeTab, setActiveTab] = useState("view");
+
+    // Admin Edit Quantity Modal State
+    const [editingItem, setEditingItem] = useState(null);
+    const [editForm, setEditForm] = useState({
+        warehouse_id: "",
+        new_quantity: "",
+        remarks: ""
+    });
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editError, setEditError] = useState("");
 
     // Shift stock state
     const [shiftForm, setShiftForm] = useState({
@@ -73,7 +84,6 @@ function Inventory() {
             }
             try {
                 const res = await getWarehouseInventory(shiftForm.from_warehouse_id);
-                // Show all items with ANY stock (quantity OR ready_to_move > 0)
                 setShiftInventory(res.data.data.filter(i => (i.quantity || 0) + (i.ready_to_move || 0) > 0));
             } catch (err) {
                 console.error("Error fetching shift inventory:", err);
@@ -82,9 +92,7 @@ function Inventory() {
         fetchShiftInventory();
     }, [shiftForm.from_warehouse_id]);
 
-    // Determine which warehouses user can see (all active warehouses for all users)
-    const getAllowedWarehouses = () => warehouses;
-    const allowedWarehouses = getAllowedWarehouses();
+    const allowedWarehouses = warehouses;
 
     const filteredInventory = inventory.filter(item =>
         item.internal_model.toLowerCase().includes(searchQuery.toLowerCase())
@@ -94,7 +102,6 @@ function Inventory() {
         const { name, value } = e.target;
         setShiftForm(prev => {
             const updated = { ...prev, [name]: value };
-            // Reset product if from_warehouse changes
             if (name === "from_warehouse_id") updated.product_id = "";
             return updated;
         });
@@ -115,12 +122,11 @@ function Inventory() {
             return;
         }
 
-        // Check available quantity (quantity + ready_to_move)
         const selectedProduct = shiftInventory.find(i => i.product_id === parseInt(product_id));
         if (selectedProduct) {
             const totalAvail = (selectedProduct.quantity || 0) + (selectedProduct.ready_to_move || 0);
             if (parseInt(quantity) > totalAvail) {
-                setShiftError(`Insufficient stock. Total available (stock + ready-to-move): ${totalAvail} pcs`);
+                setShiftError(`Insufficient stock. Total available: ${totalAvail} pcs`);
                 return;
             }
         }
@@ -131,12 +137,112 @@ function Inventory() {
             setShiftSuccess("Stock shifted successfully!");
             setShiftForm({ from_warehouse_id: "", to_warehouse_id: "", product_id: "", quantity: "", remarks: "" });
             setTimeout(() => setShiftSuccess(""), 4000);
-            // Refresh view tab inventory
             fetchInventory();
         } catch (err) {
             setShiftError(err.response?.data?.message || "Failed to shift stock.");
         } finally {
             setShiftLoading(false);
+        }
+    };
+
+    // Admin Edit Quantity Modal State
+    const [fetchingWhStock, setFetchingWhStock] = useState(false);
+
+    const handleModalWarehouseChange = async (newWhId) => {
+        setEditForm(prev => ({ ...prev, warehouse_id: newWhId, new_quantity: "" }));
+        if (!newWhId || !editingItem) return;
+
+        try {
+            setFetchingWhStock(true);
+            const res = await getWarehouseInventory(newWhId);
+            const items = res.data.data || [];
+            const targetProdId = editingItem.product_id || editingItem.id;
+            const match = items.find(i => (i.product_id || i.id) === targetProdId);
+            const currentQty = match ? match.quantity : 0;
+            setEditForm(prev => ({ ...prev, new_quantity: String(currentQty) }));
+        } catch (err) {
+            console.error("Error fetching warehouse stock for modal:", err);
+            setEditForm(prev => ({ ...prev, new_quantity: "0" }));
+        } finally {
+            setFetchingWhStock(false);
+        }
+    };
+
+    // Open Admin Quantity Edit Modal
+    const openEditModal = async (item) => {
+        setEditingItem(item);
+        setEditError("");
+
+        if (selectedWarehouseId !== "all") {
+            setEditForm({
+                warehouse_id: selectedWarehouseId,
+                new_quantity: item.quantity !== undefined ? String(item.quantity) : "0",
+                remarks: ""
+            });
+        } else {
+            const defaultWh = warehouses[0] ? String(warehouses[0].id) : "";
+            setEditForm({
+                warehouse_id: defaultWh,
+                new_quantity: "",
+                remarks: ""
+            });
+
+            if (defaultWh) {
+                try {
+                    setFetchingWhStock(true);
+                    const res = await getWarehouseInventory(defaultWh);
+                    const items = res.data.data || [];
+                    const targetProdId = item.product_id || item.id;
+                    const match = items.find(i => (i.product_id || i.id) === targetProdId);
+                    setEditForm(prev => ({ ...prev, new_quantity: String(match ? match.quantity : 0) }));
+                } catch (err) {
+                    setEditForm(prev => ({ ...prev, new_quantity: "0" }));
+                } finally {
+                    setFetchingWhStock(false);
+                }
+            }
+        }
+    };
+
+    const closeEditModal = () => {
+        setEditingItem(null);
+        setEditForm({ warehouse_id: "", new_quantity: "", remarks: "" });
+        setEditError("");
+        setFetchingWhStock(false);
+    };
+
+    const handleSaveAdminEdit = async (e) => {
+        e.preventDefault();
+        setEditError("");
+
+        const whId = editForm.warehouse_id || (selectedWarehouseId !== "all" ? selectedWarehouseId : "");
+        if (!whId) {
+            setEditError("Please select a warehouse.");
+            return;
+        }
+        if (editForm.new_quantity === "" || isNaN(parseInt(editForm.new_quantity))) {
+            setEditError("Please enter a valid quantity.");
+            return;
+        }
+
+        try {
+            setSavingEdit(true);
+            await updateStockQuantity({
+                warehouse_id: parseInt(whId),
+                product_id: parseInt(editingItem.product_id || editingItem.id),
+                new_quantity: parseInt(editForm.new_quantity),
+                remarks: editForm.remarks
+            });
+
+            setSuccessMessage(`Updated stock quantity for "${editingItem.internal_model}" successfully!`);
+            setTimeout(() => setSuccessMessage(""), 4000);
+            closeEditModal();
+            fetchInventory();
+        } catch (err) {
+            console.error("Save admin edit error:", err);
+            setEditError(err.response?.data?.message || err.message || "Failed to update stock quantity.");
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -190,14 +296,16 @@ function Inventory() {
             {activeTab === "view" && (
                 <div className="section" style={{ marginTop: 0 }}>
                     {error && <div className="alert alert-error">{error}</div>}
-                    <div style={{ display: "flex", gap: "15px", marginBottom: "20px", flexWrap: "wrap" }}>
+                    {successMessage && <div className="alert alert-success">✅ {successMessage}</div>}
+
+                    <div style={{ display: "flex", gap: "15px", marginBottom: "20px", flexWrap: "wrap", alignItems: "center" }}>
                         <div style={{ flex: 1, minWidth: "200px", maxWidth: "300px" }}>
                             <select
                                 value={selectedWarehouseId}
                                 onChange={e => setSelectedWarehouseId(e.target.value)}
                                 className="form-select"
                             >
-                                <option value="all">All Warehouses</option>
+                                <option value="all">All Warehouses (Aggregated)</option>
                                 {allowedWarehouses.map(w => (
                                     <option key={w.id} value={w.id}>
                                         {w.warehouse_name} ({w.warehouse_code})
@@ -214,6 +322,12 @@ function Inventory() {
                                 className="form-input"
                             />
                         </div>
+
+                        {isAdmin && (
+                            <div style={{ marginLeft: "auto", fontSize: "12px", background: "#eff6ff", color: "#1d4ed8", padding: "6px 12px", borderRadius: "20px", fontWeight: 600, border: "1px solid #bfdbfe" }}>
+                                👑 Admin Access: Direct Quantity Edit Enabled
+                            </div>
+                        )}
                     </div>
 
                     {loading ? (
@@ -223,15 +337,28 @@ function Inventory() {
                             <thead>
                                 <tr>
                                     <th>Product Model</th>
-                                    <th>Total Quantity (Pieces)</th>
+                                    <th>
+                                        {selectedWarehouseId !== "all" ? (
+                                            <>
+                                                Quantity in{" "}
+                                                <span style={{ color: "#4f46e5" }}>
+                                                    {warehouses.find(w => String(w.id) === String(selectedWarehouseId))?.warehouse_name || "Warehouse"}
+                                                </span>{" "}
+                                                (Pieces)
+                                            </>
+                                        ) : (
+                                            "Total Quantity (All Warehouses)"
+                                        )}
+                                    </th>
                                     <th>Ready To Move (Pieces)</th>
                                     <th>Total In Hand (Pieces)</th>
+                                    {isAdmin && <th style={{ textAlign: "center", width: "130px" }}>Admin Action</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredInventory.length === 0 ? (
                                     <tr>
-                                        <td colSpan="4" style={{ textAlign: "center", color: "#64748b" }}>
+                                        <td colSpan={isAdmin ? "5" : "4"} style={{ textAlign: "center", color: "#64748b" }}>
                                             No inventory found.
                                         </td>
                                     </tr>
@@ -239,7 +366,7 @@ function Inventory() {
                                     filteredInventory.map(item => {
                                         const isLowStock = item.quantity < 50;
                                         return (
-                                            <tr key={item.id} style={isLowStock ? { backgroundColor: "#fef2f2" } : {}}>
+                                            <tr key={item.id || item.product_id} style={isLowStock ? { backgroundColor: "#fef2f2" } : {}}>
                                                 <td style={{ fontWeight: 500, color: "#0f172a" }}>
                                                     {item.internal_model}
                                                     {isLowStock && (
@@ -255,6 +382,25 @@ function Inventory() {
                                                 <td style={{ fontWeight: 700, color: "#0369a1" }}>
                                                     {(Number(item.quantity) || 0) + (Number(item.ready_to_move) || 0)}
                                                 </td>
+                                                {isAdmin && (
+                                                    <td style={{ textAlign: "center" }}>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-secondary btn-sm"
+                                                            onClick={() => openEditModal(item)}
+                                                            style={{
+                                                                padding: "4px 10px",
+                                                                fontSize: "12px",
+                                                                fontWeight: 600,
+                                                                background: "#f1f5f9",
+                                                                color: "#334155",
+                                                                border: "1px solid #cbd5e1"
+                                                            }}
+                                                        >
+                                                            ✏️ Edit Quantity
+                                                        </button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })
@@ -368,19 +514,6 @@ function Inventory() {
                                         placeholder="e.g. 50"
                                         required
                                     />
-                                    {shiftForm.product_id && shiftForm.from_warehouse_id && (() => {
-                                        const p = shiftInventory.find(i => i.product_id === parseInt(shiftForm.product_id));
-                                        if (!p) return null;
-                                        const totalAvail = (p.quantity || 0) + (p.ready_to_move || 0);
-                                        return (
-                                            <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block" }}>
-                                                Total available: <strong>{totalAvail}</strong> pcs
-                                                {p.ready_to_move > 0 && (
-                                                    <span style={{ color: "#16a34a" }}> ({p.quantity} stock + {p.ready_to_move} ready-to-move)</span>
-                                                )}
-                                            </span>
-                                        );
-                                    })()}
                                 </div>
 
                                 <div className="form-group">
@@ -404,6 +537,115 @@ function Inventory() {
                             >
                                 {shiftLoading ? "Moving Stock..." : "🔄 Move Stock"}
                             </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* === ADMIN EDIT QUANTITY MODAL === */}
+            {editingItem && (
+                <div className="modal-overlay" onClick={closeEditModal}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: "460px" }}>
+                        <div className="modal-header">
+                            <h3>✏️ Edit Warehouse Quantity (Admin)</h3>
+                            <button className="modal-close" onClick={closeEditModal}>&times;</button>
+                        </div>
+                        <form onSubmit={handleSaveAdminEdit}>
+                            <div className="modal-body">
+                                {editError && <div className="alert alert-error">{editError}</div>}
+
+                                <div style={{ marginBottom: "16px", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontSize: "12px", color: "#64748b" }}>Product Model:</div>
+                                    <div style={{ fontWeight: 700, fontSize: "15px", color: "#0f172a" }}>
+                                        {editingItem.internal_model}
+                                    </div>
+                                </div>
+
+                                {/* Warehouse selector inside modal if viewing "all" warehouses */}
+                                <div className="form-group">
+                                    <label>Target Warehouse</label>
+                                    {selectedWarehouseId !== "all" ? (
+                                        <div style={{ padding: "8px 12px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "6px", fontWeight: 700, color: "#1d4ed8" }}>
+                                            🏢 {allowedWarehouses.find(w => String(w.id) === String(selectedWarehouseId))?.warehouse_name || "Selected Warehouse"}
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={editForm.warehouse_id}
+                                            onChange={e => handleModalWarehouseChange(e.target.value)}
+                                            className="form-select"
+                                            required
+                                            disabled={fetchingWhStock}
+                                        >
+                                            <option value="">Select Warehouse to Modify</option>
+                                            {allowedWarehouses.map(w => (
+                                                <option key={w.id} value={w.id}>
+                                                    {w.warehouse_name} ({w.warehouse_code})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label>
+                                        {selectedWarehouseId !== "all" ? (
+                                            <>
+                                                Stock Quantity in{" "}
+                                                <strong>
+                                                    {allowedWarehouses.find(w => String(w.id) === String(selectedWarehouseId))?.warehouse_name}
+                                                </strong>{" "}
+                                                (Pieces)
+                                            </>
+                                        ) : (
+                                            <>
+                                                Stock Quantity in{" "}
+                                                <strong>
+                                                    {allowedWarehouses.find(w => String(w.id) === String(editForm.warehouse_id))?.warehouse_name || "Selected Warehouse"}
+                                                </strong>{" "}
+                                                (Pieces)
+                                            </>
+                                        )}
+                                        {fetchingWhStock && <span style={{ marginLeft: "8px", fontSize: "12px", color: "#6366f1" }}>⏳ Loading stock...</span>}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={editForm.new_quantity}
+                                        onChange={e => setEditForm({ ...editForm, new_quantity: e.target.value })}
+                                        className="form-input"
+                                        placeholder={fetchingWhStock ? "Loading stock..." : "Enter quantity for this warehouse in pieces..."}
+                                        required
+                                        disabled={fetchingWhStock}
+                                        style={{ fontSize: "16px", fontWeight: 700 }}
+                                    />
+                                    {editingItem.pieces_per_box > 1 && editForm.new_quantity !== "" && !isNaN(parseInt(editForm.new_quantity)) && (
+                                        <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                                            ≈ <strong>{(parseInt(editForm.new_quantity) / editingItem.pieces_per_box).toFixed(2)}</strong> boxes ({editingItem.pieces_per_box} pcs/box)
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Reason / Remarks (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.remarks}
+                                        onChange={e => setEditForm({ ...editForm, remarks: e.target.value })}
+                                        className="form-input"
+                                        placeholder="e.g. Physical inventory audit recount"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={closeEditModal}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={savingEdit}>
+                                    {savingEdit ? "Updating..." : "Save New Quantity"}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>

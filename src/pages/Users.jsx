@@ -23,6 +23,7 @@ function Users() {
         can_upload_po: false,
         can_download_reports: false,
         can_manage_products: false,
+        can_adjust_stock: false,
         inventory_warehouse_access: []
     });
 
@@ -65,6 +66,7 @@ function Users() {
             can_upload_po: false,
             can_download_reports: false,
             can_manage_products: false,
+            can_adjust_stock: false,
             inventory_warehouse_access: []
         });
         setError("");
@@ -83,6 +85,7 @@ function Users() {
             can_upload_po: user.can_upload_po || false,
             can_download_reports: user.can_download_reports || false,
             can_manage_products: user.can_manage_products || false,
+            can_adjust_stock: user.can_adjust_stock || false,
             inventory_warehouse_access: user.inventory_warehouse_access || []
         });
         setError("");
@@ -109,6 +112,7 @@ function Users() {
                 can_upload_po: true,
                 can_download_reports: true,
                 can_manage_products: true,
+                can_adjust_stock: true,
                 inventory_warehouse_access: []
             }));
         } else if (name === "inventory_warehouse_access") {
@@ -133,7 +137,7 @@ function Users() {
         e.preventDefault();
         const {
             full_name, username, password, role, warehouse_id,
-            can_upload_po, can_download_reports, can_manage_products
+            can_upload_po, can_download_reports, can_manage_products, can_adjust_stock
         } = formData;
 
         if (!full_name.trim() || !username.trim() || !role) {
@@ -155,6 +159,7 @@ function Users() {
             can_upload_po,
             can_download_reports,
             can_manage_products,
+            can_adjust_stock: role === "ADMIN" ? true : can_adjust_stock,
             inventory_warehouse_access: role === "ADMIN" ? [] : (inventory_warehouse_access || []),
             is_active: currentUser ? currentUser.is_active : true
         };
@@ -229,6 +234,7 @@ function Users() {
         if (u.can_upload_po) list.push("Upload PO");
         if (u.can_download_reports) list.push("Reports");
         if (u.can_manage_products) list.push("Products");
+        if (u.can_adjust_stock) list.push("Adjust Stock (+/-)");
 
         const invAccess = u.inventory_warehouse_access;
         if (invAccess && invAccess.length > 0) {
@@ -236,7 +242,7 @@ function Users() {
                 const w = warehouses.find(wh => wh.id === id);
                 return w ? w.warehouse_name : `#${id}`;
             }).join(", ");
-            list.push(`Inventory: ${wNames}`);
+            list.push(`Warehouse Access: ${wNames}`);
         }
 
         return list.length === 0 ? "No special permissions" : list.join(" · ");
@@ -453,6 +459,15 @@ function Users() {
                                             />
                                             Manage Products
                                         </label>
+                                        <label className="checkbox-label" style={{ border: formData.can_adjust_stock ? "1px solid #f59e0b" : "1px solid #e2e8f0", background: formData.can_adjust_stock ? "#fffbeb" : "#ffffff" }}>
+                                            <input
+                                                type="checkbox"
+                                                name="can_adjust_stock"
+                                                checked={formData.can_adjust_stock}
+                                                onChange={handleFormChange}
+                                            />
+                                            ⚡ Adjust Stock / Stock Out (+/-)
+                                        </label>
                                     </div>
                                 </div>
                             )}
@@ -460,9 +475,9 @@ function Users() {
                             {formData.role !== "ADMIN" && (
                                 <div className="form-group">
                                     <label style={{ marginBottom: "8px" }}>
-                                        📦 Inventory View Access
+                                        📦 Warehouse Access Rights (Inventory &amp; Stock Entry)
                                         <span style={{ fontWeight: 400, color: "#94a3b8", marginLeft: "6px", fontSize: "12px" }}>
-                                            (Select warehouses this user can view in Inventory)
+                                            (Select multiple warehouses this user can view &amp; perform stock entry for)
                                         </span>
                                     </label>
                                     {warehouses.filter(w => w.is_active).length === 0 ? (

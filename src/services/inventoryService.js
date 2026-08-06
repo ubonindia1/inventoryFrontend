@@ -29,3 +29,15 @@ export const getMyHistory = async () => {
 export const getReadyToMove = async () => {
     return API.get("/inventory/ready-to-move");
 };
+
+// Admin direct inventory quantity update
+export const updateStockQuantity = async (updateData) => {
+    return API.post("/inventory/stock-entry", {
+        warehouse_id: updateData.warehouse_id,
+        product_id: updateData.product_id,
+        boxes: 0,
+        quantity: updateData.new_quantity,
+        type: 'SET',
+        remarks: updateData.remarks
+    });
+};

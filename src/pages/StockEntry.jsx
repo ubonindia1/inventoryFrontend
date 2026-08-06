@@ -13,6 +13,24 @@ const newRow = () => ({
     type: "IN" // 'IN' or 'OUT'
 });
 
+const normalizeArray = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+        try {
+            const trimmed = val.trim();
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                return trimmed.slice(1, -1).split(",").map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+            }
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+};
+
 function StockEntry() {
     const [user, setUser] = useState(null);
     const [warehouses, setWarehouses] = useState([]);
@@ -52,9 +70,8 @@ function StockEntry() {
                 } else {
                     const allowedIds = new Set();
                     if (storedUser.warehouse_id) allowedIds.add(Number(storedUser.warehouse_id));
-                    if (Array.isArray(storedUser.inventory_warehouse_access)) {
-                        storedUser.inventory_warehouse_access.forEach(id => allowedIds.add(Number(id)));
-                    }
+                    const accessList = normalizeArray(storedUser.inventory_warehouse_access);
+                    accessList.forEach(id => allowedIds.add(Number(id)));
 
                     const userPermitted = activeWarehouses.filter(w => allowedIds.has(w.id));
                     setAllowedWarehouses(userPermitted);

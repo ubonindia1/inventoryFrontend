@@ -33,6 +33,24 @@ function Users() {
     const [resetUserId, setResetUserId] = useState(null);
     const [newPassword, setNewPassword] = useState("");
 
+    const normalizeArray = (val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === "string") {
+            try {
+                const trimmed = val.trim();
+                if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                    return trimmed.slice(1, -1).split(",").map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+                }
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed;
+            } catch (e) {
+                return [];
+            }
+        }
+        return [];
+    };
+
     const loadData = async () => {
         try {
             setLoading(true);
@@ -40,8 +58,14 @@ function Users() {
                 getUsers(),
                 getWarehouses()
             ]);
-            setUsers(usersRes.data.data);
-            setWarehouses(warehousesRes.data.data);
+            const rawUsers = Array.isArray(usersRes?.data?.data) ? usersRes.data.data : (Array.isArray(usersRes?.data) ? usersRes.data : []);
+            const rawWarehouses = Array.isArray(warehousesRes?.data?.data) ? warehousesRes.data.data : (Array.isArray(warehousesRes?.data) ? warehousesRes.data : []);
+
+            setUsers(rawUsers.map(u => ({
+                ...u,
+                inventory_warehouse_access: normalizeArray(u.inventory_warehouse_access)
+            })));
+            setWarehouses(rawWarehouses);
             setError("");
         } catch (err) {
             console.error("Load users data error:", err);
@@ -62,7 +86,7 @@ function Users() {
             username: "",
             password: "",
             role: "STAFF",
-            warehouse_id: warehouses.find(w => w.is_active)?.id || "",
+            warehouse_id: (Array.isArray(warehouses) ? warehouses : []).find(w => w.is_active)?.id || "",
             can_upload_po: false,
             can_download_reports: false,
             can_manage_products: false,
@@ -86,7 +110,7 @@ function Users() {
             can_download_reports: user.can_download_reports || false,
             can_manage_products: user.can_manage_products || false,
             can_adjust_stock: user.can_adjust_stock || false,
-            inventory_warehouse_access: user.inventory_warehouse_access || []
+            inventory_warehouse_access: normalizeArray(user.inventory_warehouse_access)
         });
         setError("");
         setSuccess("");
@@ -117,9 +141,9 @@ function Users() {
             }));
         } else if (name === "inventory_warehouse_access") {
             // Toggle warehouse ID in the array
-            const warehouseId = parseInt(value);
+            const warehouseId = parseInt(value, 10);
             setFormData((prev) => {
-                const current = prev.inventory_warehouse_access || [];
+                const current = normalizeArray(prev.inventory_warehouse_access);
                 const next = current.includes(warehouseId)
                     ? current.filter(id => id !== warehouseId)
                     : [...current, warehouseId];
@@ -160,7 +184,7 @@ function Users() {
             can_download_reports,
             can_manage_products,
             can_adjust_stock: role === "ADMIN" ? true : can_adjust_stock,
-            inventory_warehouse_access: role === "ADMIN" ? [] : (inventory_warehouse_access || []),
+            inventory_warehouse_access: role === "ADMIN" ? [] : normalizeArray(inventory_warehouse_access),
             is_active: currentUser ? currentUser.is_active : true
         };
 
@@ -236,10 +260,11 @@ function Users() {
         if (u.can_manage_products) list.push("Products");
         if (u.can_adjust_stock) list.push("Adjust Stock (+/-)");
 
-        const invAccess = u.inventory_warehouse_access;
-        if (invAccess && invAccess.length > 0) {
+        const invAccess = normalizeArray(u.inventory_warehouse_access);
+        if (invAccess.length > 0) {
+            const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
             const wNames = invAccess.map(id => {
-                const w = warehouses.find(wh => wh.id === id);
+                const w = safeWarehouses.find(wh => wh.id === id);
                 return w ? w.warehouse_name : `#${id}`;
             }).join(", ");
             list.push(`Warehouse Access: ${wNames}`);
@@ -480,22 +505,25 @@ function Users() {
                                             (Select multiple warehouses this user can view &amp; perform stock entry for)
                                         </span>
                                     </label>
-                                    {warehouses.filter(w => w.is_active).length === 0 ? (
+                                    {(Array.isArray(warehouses) ? warehouses : []).filter(w => w.is_active).length === 0 ? (
                                         <p style={{ fontSize: "13px", color: "#94a3b8" }}>No active warehouses.</p>
                                     ) : (
                                         <div className="checkbox-group">
-                                            {warehouses.filter(w => w.is_active).map(w => (
-                                                <label key={w.id} className="checkbox-label" style={{ border: (formData.inventory_warehouse_access || []).includes(w.id) ? "1px solid #818cf8" : "1px solid #e2e8f0", background: (formData.inventory_warehouse_access || []).includes(w.id) ? "#eef2ff" : "#f8fafc" }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        name="inventory_warehouse_access"
-                                                        value={w.id}
-                                                        checked={(formData.inventory_warehouse_access || []).includes(w.id)}
-                                                        onChange={handleFormChange}
-                                                    />
-                                                    {w.warehouse_name} ({w.warehouse_code})
-                                                </label>
-                                            ))}
+                                            {(Array.isArray(warehouses) ? warehouses : []).filter(w => w.is_active).map(w => {
+                                                const isAccessChecked = normalizeArray(formData.inventory_warehouse_access).includes(w.id);
+                                                return (
+                                                    <label key={w.id} className="checkbox-label" style={{ border: isAccessChecked ? "1px solid #818cf8" : "1px solid #e2e8f0", background: isAccessChecked ? "#eef2ff" : "#f8fafc" }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            name="inventory_warehouse_access"
+                                                            value={w.id}
+                                                            checked={isAccessChecked}
+                                                            onChange={handleFormChange}
+                                                        />
+                                                        {w.warehouse_name} ({w.warehouse_code})
+                                                    </label>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>

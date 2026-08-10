@@ -7,6 +7,8 @@ const PLATFORMS = [
     { id: "AMAZON",  label: "Amazon",  color: "#c2410c", bg: "#fff7ed", border: "#fed7aa", hint: "Excel columns: ASIN, Quantity" },
     { id: "BLINKIT", label: "Blinkit", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0", hint: "Excel columns: Item Code (or PID), Quantity" },
     { id: "ZEPTO",   label: "Zepto",   color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff", hint: "Excel columns: Zepto Code (or SKU), Quantity" },
+    { id: "FLIPKART", label: "Flipkart", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", hint: "Excel columns: FSN, PO Qty" },
+    { id: "SWIGGY", label: "Swiggy", color: "#ea580c", bg: "#fff7ed", border: "#fed7aa", hint: "Excel columns: Item Code, Qty" },
 ];
 
 const statusBadge = (status) => {
@@ -140,7 +142,13 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
                                             <td style={{ color: "#94a3b8" }}>{idx + 1}</td>
                                             <td>
                                                 <div style={{ fontWeight: 500, color: "#0f172a" }}>{item.internal_model}</div>
-                                                {item.amazon_asin && <div style={{ fontSize: "12px", color: "#94a3b8" }}>{item.amazon_asin}</div>}
+                                                {item.amazon_asin && <div style={{ fontSize: "12px", color: "#94a3b8" }}>ASIN: {item.amazon_asin}</div>}
+                                                {item.blinkit_pid && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Blinkit PID: {item.blinkit_pid}</div>}
+                                                {item.blinkit_item_code && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Blinkit Item Code: {item.blinkit_item_code}</div>}
+                                                {item.flipkart_fsn && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Flipkart FSN: {item.flipkart_fsn}</div>}
+                                                {item.swiggy_item_code && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Swiggy Item Code: {item.swiggy_item_code}</div>}
+                                                {item.meesho_catalog_id && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Meesho Catalog ID: {item.meesho_catalog_id}</div>}
+                                                {item.meesho_product_id && <div style={{ fontSize: "12px", color: "#94a3b8" }}>Meesho Product ID: {item.meesho_product_id}</div>}
                                             </td>
                                             <td style={{ textAlign: "center", fontWeight: 600 }}>{item.required_quantity}</td>
                                             <td style={{ textAlign: "center" }}>

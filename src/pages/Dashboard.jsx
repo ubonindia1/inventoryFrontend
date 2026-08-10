@@ -65,7 +65,9 @@ function Dashboard() {
                                     const pColors = {
                                         AMAZON: { bg: "#fff7ed", color: "#c2410c" },
                                         BLINKIT: { bg: "#f0fdf4", color: "#15803d" },
-                                        ZEPTO: { bg: "#faf5ff", color: "#7c3aed" }
+                                        ZEPTO: { bg: "#faf5ff", color: "#7c3aed" },
+                                        FLIPKART: { bg: "#eff6ff", color: "#2563eb" },
+                                        SWIGGY: { bg: "#fff7ed", color: "#ea580c" }
                                     };
                                     const colors = pColors[po.platform] || { bg: "#f1f5f9", color: "#475569" };
                                     return (

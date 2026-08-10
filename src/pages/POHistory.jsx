@@ -68,6 +68,8 @@ function POHistory() {
                             <option value="AMAZON">Amazon</option>
                             <option value="BLINKIT">Blinkit</option>
                             <option value="ZEPTO">Zepto</option>
+                            <option value="FLIPKART">Flipkart</option>
+                            <option value="SWIGGY">Swiggy</option>
                         </select>
                     </div>
                     <div style={{ flex: 1, maxWidth: "350px" }}>
@@ -112,8 +114,8 @@ function POHistory() {
                                             borderRadius: "12px",
                                             fontSize: "12px",
                                             fontWeight: 600,
-                                            background: order.platform === "AMAZON" ? "#fff7ed" : order.platform === "BLINKIT" ? "#f0fdf4" : "#faf5ff",
-                                            color: order.platform === "AMAZON" ? "#c2410c" : order.platform === "BLINKIT" ? "#15803d" : "#7c3aed"
+                                            background: order.platform === "AMAZON" ? "#fff7ed" : order.platform === "BLINKIT" ? "#f0fdf4" : order.platform === "FLIPKART" ? "#eff6ff" : order.platform === "SWIGGY" ? "#fff7ed" : "#faf5ff",
+                                            color: order.platform === "AMAZON" ? "#c2410c" : order.platform === "BLINKIT" ? "#15803d" : order.platform === "FLIPKART" ? "#2563eb" : order.platform === "SWIGGY" ? "#ea580c" : "#7c3aed"
                                         }}>
                                             {order.platform}
                                         </span>

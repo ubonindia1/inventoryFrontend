@@ -32,7 +32,12 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
         return (
             (p.internal_model && p.internal_model.toLowerCase().includes(query)) ||
             (p.amazon_asin && p.amazon_asin.toLowerCase().includes(query)) ||
+            (p.blinkit_pid && p.blinkit_pid.toLowerCase().includes(query)) ||
             (p.blinkit_item_code && p.blinkit_item_code.toLowerCase().includes(query)) ||
+            (p.flipkart_fsn && p.flipkart_fsn.toLowerCase().includes(query)) ||
+            (p.swiggy_item_code && p.swiggy_item_code.toLowerCase().includes(query)) ||
+            (p.meesho_catalog_id && p.meesho_catalog_id.toLowerCase().includes(query)) ||
+            (p.meesho_product_id && p.meesho_product_id.toLowerCase().includes(query)) ||
             (p.zepto_sku && p.zepto_sku.toLowerCase().includes(query))
         );
     });
@@ -161,6 +166,36 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
                                             {p.amazon_asin && (
                                                 <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                     ASIN: {p.amazon_asin}
+                                                </div>
+                                            )}
+                                            {p.blinkit_pid && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Blinkit PID: {p.blinkit_pid}
+                                                </div>
+                                            )}
+                                            {p.blinkit_item_code && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Blinkit Item Code: {p.blinkit_item_code}
+                                                </div>
+                                            )}
+                                            {p.flipkart_fsn && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Flipkart FSN: {p.flipkart_fsn}
+                                                </div>
+                                            )}
+                                            {p.swiggy_item_code && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Swiggy Item Code: {p.swiggy_item_code}
+                                                </div>
+                                            )}
+                                            {p.meesho_catalog_id && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Meesho Catalog ID: {p.meesho_catalog_id}
+                                                </div>
+                                            )}
+                                            {p.meesho_product_id && (
+                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                    Meesho Product ID: {p.meesho_product_id}
                                                 </div>
                                             )}
                                         </div>

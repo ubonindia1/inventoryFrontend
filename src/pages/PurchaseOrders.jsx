@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { uploadPO, approvePO, submitPOForApproval, getPurchaseOrders, getPOItems, approveNewPO } from "../services/poService";
+import { uploadPO, approvePO, submitPOForApproval, getPurchaseOrders, getPOItems, approveNewPO, editPOItems } from "../services/poService";
 import "../css/admin.css";
 import "../css/dashboard.css";
 
@@ -10,6 +10,24 @@ const PLATFORMS = [
     { id: "FLIPKART", label: "Flipkart", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", hint: "Excel columns: FSN, PO Qty" },
     { id: "SWIGGY", label: "Swiggy", color: "#ea580c", bg: "#fff7ed", border: "#fed7aa", hint: "Excel columns: Item Code, Qty" },
 ];
+
+const PREFIX_MAP = {
+    AMAZON: "AMA-",
+    BLINKIT: "BLI-",
+    ZEPTO: "ZEP-",
+    FLIPKART: "FLI-",
+    SWIGGY: "SWI-"
+};
+
+const getExtractedPONumber = (fileName, platformId) => {
+    if (!fileName) return "";
+    const baseName = fileName.replace(/\.[^/.]+$/, "").trim();
+    const prefix = PREFIX_MAP[platformId] || `${platformId.substring(0, 3)}-`;
+    if (baseName.toUpperCase().startsWith(prefix.toUpperCase())) {
+        return baseName;
+    }
+    return `${prefix}${baseName}`;
+};
 
 const statusBadge = (status) => {
     const map = {
@@ -27,53 +45,93 @@ const fmtDate = (iso) => new Date(iso).toLocaleString("en-IN", {
 });
 
 // ── Admin Review Modal ────────────────────────────────────────────────────────
-// ── Admin Review Modal ────────────────────────────────────────────────────────
-const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess }) => {
+// ── Unified PO Review / Edit Modal ────────────────────────────────────────────
+const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageError, setPageSuccess }) => {
     const authData = JSON.parse(localStorage.getItem("auth") || "{}");
     const user = authData.user || JSON.parse(localStorage.getItem("user") || "{}");
     const isAdmin = user.role === "ADMIN";
 
     const isPendingOrDone = poData.status === "PENDING_APPROVAL" || poData.status === "APPROVED" || poData.status === "CANCELLED";
-    const isReadOnly = !isAdmin || poData.status === "APPROVED" || poData.status === "CANCELLED";
+    
+    // In edit mode (clicked ✏️ Edit), editing is enabled for the user/uploader.
+    // In view mode, editing is enabled only for Admin on pending/draft POs.
+    const isReadOnly = isEditMode
+        ? false
+        : (!isAdmin || poData.status === "APPROVED" || poData.status === "CANCELLED");
 
     // editedQtys: { [item.id]: number }
+    // In edit mode: Auto-fills up to required_quantity if new stock is available in DB.
+    // In view mode: Uses assigned_quantity for pending/approved POs.
     const [editedQtys, setEditedQtys] = useState(() => {
         const init = {};
         for (const item of poData.items) {
-            init[item.id] = isPendingOrDone
-                ? item.assigned_quantity
-                : item.required_quantity;
+            if (isEditMode) {
+                const maxAvailableFromDB = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
+                init[item.id] = Math.min(Number(item.required_quantity || 0), maxAvailableFromDB);
+            } else if (isPendingOrDone) {
+                init[item.id] = Number(item.assigned_quantity || 0);
+            } else {
+                init[item.id] = Number(item.required_quantity || 0);
+            }
         }
         return init;
     });
-    const [approving, setApproving] = useState(false);
+    const [modalError, setModalError] = useState("");
+    const [saving, setSaving] = useState(false);
 
     const pl = PLATFORMS.find(p => p.id === poData.platform) || {};
 
     const handleQtyChange = (itemId, val) => {
         if (isReadOnly) return;
+        setModalError("");
         const item = poData.items.find(i => i.id === itemId);
-        const max = item.required_quantity;
+        const max = Number(item.required_quantity || 0);
         const parsed = Math.max(0, Math.min(parseInt(val) || 0, max));
         setEditedQtys(prev => ({ ...prev, [itemId]: parsed }));
     };
 
-    const handleApprove = async () => {
+    // Check if any item quantity exceeds available stock in DB
+    const hasStockError = isEditMode && poData.items.some(item => {
+        const maxAvail = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
+        const entered = editedQtys[item.id] ?? Math.min(Number(item.required_quantity || 0), maxAvail);
+        return entered > maxAvail;
+    });
+
+    const handleSave = async () => {
         if (isReadOnly) return;
+
+        if (isEditMode) {
+            for (const item of poData.items) {
+                const maxAvail = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
+                const entered = editedQtys[item.id] ?? Math.min(Number(item.required_quantity || 0), maxAvail);
+                if (entered > maxAvail) {
+                    setModalError(`❌ Cannot save: Quantity for "${item.internal_model}" (${entered}) exceeds total available stock in DB (${maxAvail}).`);
+                    return;
+                }
+            }
+        }
+
         try {
-            setApproving(true);
+            setSaving(true);
+            setModalError("");
             const itemOverrides = poData.items.map(item => ({
                 item_id: item.id,
                 quantity: editedQtys[item.id] ?? (isPendingOrDone ? item.assigned_quantity : item.required_quantity)
             }));
-            await approvePO(poData.id, itemOverrides);
-            setPageSuccess(`✅ PO ${poData.po_number} approved successfully.`);
-            onApproved();
+
+            if (isEditMode) {
+                await editPOItems(poData.id, itemOverrides);
+                setPageSuccess(`✅ PO ${poData.po_number} updated successfully. Stock re-allocated. (Awaiting Admin Approval)`);
+            } else {
+                await approvePO(poData.id, itemOverrides);
+                setPageSuccess(`✅ PO ${poData.po_number} approved successfully.`);
+            }
+            onSaved();
             onClose();
         } catch (err) {
-            setPageError(err.response?.data?.message || "Failed to approve PO.");
+            setPageError(err.response?.data?.message || `Failed to ${isEditMode ? "update" : "approve"} PO.`);
         } finally {
-            setApproving(false);
+            setSaving(false);
         }
     };
 
@@ -91,7 +149,7 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
                 <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                         <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", color: "#0f172a" }}>
-                            Review PO: {poData.po_number}
+                            {isEditMode ? `✏️ Edit PO: ${poData.po_number}` : `Review PO: ${poData.po_number}`}
                         </h3>
                         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                             <span style={{ padding: "2px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, background: pl.bg, color: pl.color }}>{pl.label}</span>
@@ -106,16 +164,24 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
 
                 {/* Modal Body */}
                 <div style={{ overflowY: "auto", padding: "20px 24px", flex: 1 }}>
-                    {poData.status === "PENDING_APPROVAL" && (
+                    {modalError && (
+                        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", fontWeight: 600 }}>
+                            {modalError}
+                        </div>
+                    )}
+                    {isEditMode ? (
+                        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px", fontSize: "13px", color: "#92400e" }}>
+                            <strong>Edit Mode:</strong> Modify the quantity for each item below. Quantities cannot exceed available DB stock. When you save, stock will be re-allocated for Admin approval.
+                        </div>
+                    ) : poData.status === "PENDING_APPROVAL" ? (
                         <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px", fontSize: "13px", color: "#1e40af" }}>
                             <strong>Note:</strong> Stock has already been reserved for this PO. You can reduce or increase the approve quantity. If you reduce it, excess stock is returned to the warehouse. If you increase it, additional stock will be deducted from the warehouse (subject to availability).
                         </div>
-                    )}
-                    {poData.status === "DRAFT" && (
+                    ) : poData.status === "DRAFT" ? (
                         <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px", fontSize: "13px", color: "#1e40af" }}>
                             <strong>Note:</strong> Stock has not been allocated yet. You can reduce the approve quantity below the required amount. Available stock shown is current stock across all warehouses.
                         </div>
-                    )}
+                    ) : null}
 
                     <table>
                         <thead>
@@ -132,13 +198,15 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
                                 <tr><td colSpan="5" style={{ textAlign: "center", color: "#64748b" }}>No items in this PO.</td></tr>
                             ) : (
                                 poData.items.map((item, idx) => {
-                                    const maxQty = item.required_quantity;
-                                    const approved = editedQtys[item.id] ?? (isPendingOrDone ? item.assigned_quantity : item.required_quantity);
+                                    const maxAvailableFromDB = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
+                                    const maxQty = Number(item.required_quantity || 0);
+                                    const approved = editedQtys[item.id] ?? (isEditMode ? Math.min(Number(item.required_quantity || 0), maxAvailableFromDB) : (isPendingOrDone ? Number(item.assigned_quantity || 0) : Number(item.required_quantity || 0)));
                                     const isReduced = isPendingOrDone && approved < item.assigned_quantity;
                                     const isIncreased = isPendingOrDone && approved > item.assigned_quantity;
+                                    const isExceeding = approved > maxAvailableFromDB;
                                     const isShort = !isPendingOrDone && item.current_stock < item.required_quantity;
                                     return (
-                                        <tr key={item.id} style={isShort ? { background: "#fef2f2" } : {}}>
+                                        <tr key={item.id} style={isExceeding || isShort ? { background: "#fef2f2" } : {}}>
                                             <td style={{ color: "#94a3b8" }}>{idx + 1}</td>
                                             <td>
                                                 <div style={{ fontWeight: 500, color: "#0f172a" }}>{item.internal_model}</div>
@@ -162,30 +230,37 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
                                                 )}
                                             </td>
                                             <td style={{ textAlign: "center" }}>
-                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max={maxQty}
-                                                        value={approved}
-                                                        onChange={e => handleQtyChange(item.id, e.target.value)}
-                                                        disabled={isReadOnly}
-                                                        style={{
-                                                            width: "80px", textAlign: "center", padding: "6px 8px",
-                                                            borderRadius: "6px", fontSize: "14px", fontWeight: 600,
-                                                            border: `2px solid ${isReduced ? "#f59e0b" : (isIncreased ? "#10b981" : "#e2e8f0")}`,
-                                                            background: isReduced ? "#fffbeb" : (isIncreased ? "#ecfdf5" : "white"),
-                                                            color: isReduced ? "#92400e" : (isIncreased ? "#065f46" : "#0f172a")
-                                                        }}
-                                                    />
-                                                    {isReduced && (
-                                                        <span style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 600 }}>
-                                                            -{item.assigned_quantity - approved} returned
-                                                        </span>
-                                                    )}
-                                                    {isIncreased && (
-                                                        <span style={{ fontSize: "11px", color: "#10b981", fontWeight: 600 }}>
-                                                            +{approved - item.assigned_quantity} from stock
+                                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max={maxQty}
+                                                            value={approved}
+                                                            onChange={e => handleQtyChange(item.id, e.target.value)}
+                                                            disabled={isReadOnly}
+                                                            style={{
+                                                                width: "80px", textAlign: "center", padding: "6px 8px",
+                                                                borderRadius: "6px", fontSize: "14px", fontWeight: 600,
+                                                                border: isExceeding ? "2px solid #dc2626" : `2px solid ${isReduced ? "#f59e0b" : (isIncreased ? "#10b981" : "#e2e8f0")}`,
+                                                                background: isExceeding ? "#fef2f2" : (isReduced ? "#fffbeb" : (isIncreased ? "#ecfdf5" : "white")),
+                                                                color: isExceeding ? "#dc2626" : (isReduced ? "#92400e" : (isIncreased ? "#065f46" : "#0f172a"))
+                                                            }}
+                                                        />
+                                                        {!isExceeding && isReduced && (
+                                                            <span style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 600 }}>
+                                                                -{item.assigned_quantity - approved} returned
+                                                            </span>
+                                                        )}
+                                                        {!isExceeding && isIncreased && (
+                                                            <span style={{ fontSize: "11px", color: "#10b981", fontWeight: 600 }}>
+                                                                +{approved - item.assigned_quantity} from stock
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {isExceeding && (
+                                                        <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: 700 }}>
+                                                            ⚠️ Exceeds DB stock (Max: {maxAvailableFromDB})
                                                         </span>
                                                     )}
                                                 </div>
@@ -204,13 +279,17 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
                         <button className="btn btn-secondary" onClick={onClose}>Close</button>
                     ) : (
                         <>
-                            <button className="btn btn-secondary" onClick={onClose} disabled={approving}>Cancel</button>
+                            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
                             <button
                                 className="btn btn-primary"
-                                onClick={handleApprove}
-                                disabled={approving || poData.items.length === 0}
+                                onClick={handleSave}
+                                disabled={saving || poData.items.length === 0 || hasStockError}
+                                style={isEditMode ? { background: hasStockError ? "#94a3b8" : "#d97706", borderColor: hasStockError ? "#94a3b8" : "#d97706" } : {}}
                             >
-                                {approving ? "Approving..." : "Approve with these Quantities"}
+                                {saving
+                                    ? (isEditMode ? "Saving..." : "Approving...")
+                                    : (isEditMode ? "Save Changes & Re-allocate Stock" : "Approve with these Quantities")
+                                }
                             </button>
                         </>
                     )}
@@ -218,7 +297,7 @@ const ReviewModal = ({ poData, onClose, onApproved, setPageError, setPageSuccess
             </div>
         </div>
     );
-}
+};
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 function PurchaseOrders() {
@@ -240,8 +319,8 @@ function PurchaseOrders() {
     const [poFilter, setPoFilter] = useState("");
     const [loadingList, setLoadingList] = useState(true);
 
-    // Admin review modal
-    const [reviewModal, setReviewModal] = useState(null); // holds full PO+items data
+    // Modal state: { data: poData, isEditMode: boolean }
+    const [reviewModal, setReviewModal] = useState(null);
     const [loadingModal, setLoadingModal] = useState(false);
 
     useEffect(() => { fetchPOs(); }, [poFilter]);
@@ -279,12 +358,12 @@ function PurchaseOrders() {
         });
     };
 
-    const openReviewModal = async (poId) => {
+    const openReviewModal = async (poId, isEditMode = false) => {
         try {
             setLoadingModal(true);
             setError("");
             const res = await getPOItems(poId);
-            setReviewModal(res.data.data);
+            setReviewModal({ data: res.data.data, isEditMode });
         } catch (err) {
             setError("Failed to load PO details.");
         } finally {
@@ -351,25 +430,37 @@ function PurchaseOrders() {
                 <td style={{ fontSize: "13px", color: "#64748b" }}>{fmtDate(order.created_at)}</td>
                 {showAction && (
                     <td>
-                        {isAdmin && (order.status === "PENDING_APPROVAL" || order.status === "DRAFT") ? (
-                            <button
-                                className="btn btn-secondary"
-                                style={{ padding: "4px 14px", fontSize: "13px", whiteSpace: "nowrap" }}
-                                onClick={() => openReviewModal(order.id)}
-                                disabled={loadingModal}
-                            >
-                                {loadingModal ? "..." : "View & Approve"}
-                            </button>
-                        ) : (
-                            <button
-                                className="btn btn-secondary"
-                                style={{ padding: "4px 14px", fontSize: "13px" }}
-                                onClick={() => openReviewModal(order.id)}
-                                disabled={loadingModal}
-                            >
-                                View
-                            </button>
-                        )}
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            {isAdmin && (order.status === "PENDING_APPROVAL" || order.status === "DRAFT") ? (
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: "4px 14px", fontSize: "13px", whiteSpace: "nowrap" }}
+                                    onClick={() => openReviewModal(order.id, false)}
+                                    disabled={loadingModal}
+                                >
+                                    {loadingModal ? "..." : "View & Approve"}
+                                </button>
+                            ) : (
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: "4px 14px", fontSize: "13px" }}
+                                    onClick={() => openReviewModal(order.id, false)}
+                                    disabled={loadingModal}
+                                >
+                                    View
+                                </button>
+                            )}
+                            {order.status === "PENDING_APPROVAL" && (
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ padding: "4px 14px", fontSize: "13px", background: "#d97706", borderColor: "#d97706", whiteSpace: "nowrap" }}
+                                    onClick={() => openReviewModal(order.id, true)}
+                                    disabled={loadingModal}
+                                >
+                                    ✏️ Edit
+                                </button>
+                            )}
+                        </div>
                     </td>
                 )}
             </tr>
@@ -378,12 +469,13 @@ function PurchaseOrders() {
 
     return (
         <div className="page-content">
-            {/* Review Modal */}
+            {/* Unified Review / Edit Modal */}
             {reviewModal && (
                 <ReviewModal
-                    poData={reviewModal}
+                    poData={reviewModal.data}
+                    isEditMode={reviewModal.isEditMode}
                     onClose={() => setReviewModal(null)}
-                    onApproved={fetchPOs}
+                    onSaved={fetchPOs}
                     setPageError={setError}
                     setPageSuccess={setSuccess}
                 />
@@ -439,6 +531,14 @@ function PurchaseOrders() {
                             <div className="form-group">
                                 <label>Excel File (.xlsx / .xls / .csv)</label>
                                 <input type="file" accept=".xlsx,.xls,.csv" onChange={e => setFile(e.target.files[0])} className="form-input" />
+                                <p style={{ fontSize: "12px", color: "#64748b", marginTop: "6px", marginBottom: "4px", fontWeight: 500 }}>
+                                    📌 File name will be saved with prefix <strong>{PREFIX_MAP[platform] || ""}</strong> as PO Number.
+                                </p>
+                                {file && (
+                                    <div style={{ fontSize: "12px", color: "#059669", fontWeight: 600, background: "#ecfdf5", padding: "6px 10px", borderRadius: "6px", border: "1px solid #a7f3d0", marginTop: "6px" }}>
+                                        📄 File selected: <strong>{file.name}</strong> → PO Number: <strong>{getExtractedPONumber(file.name, platform)}</strong>
+                                    </div>
+                                )}
                             </div>
                             <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: "100%", justifyContent: "center" }}>
                                 {loading ? "Parsing..." : `Upload & Preview ${pl.label} PO`}

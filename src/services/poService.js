@@ -38,3 +38,13 @@ export const approveNewPO = async (poData) => {
     return API.post(`/po/approve-new`, poData);
 };
 
+// Edit PO item quantities (before admin approval)
+export const editPOItems = async (poId, itemUpdates = []) => {
+    return API.put(`/po/${poId}/edit`, { itemUpdates });
+};
+
+// Fetch PO items that had shortages but now have available stock in warehouse
+export const getAvailableQuantityPOs = async () => {
+    return API.get("/po/available-quantity");
+};
+

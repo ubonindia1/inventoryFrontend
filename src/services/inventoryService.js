@@ -41,3 +41,13 @@ export const updateStockQuantity = async (updateData) => {
         remarks: updateData.remarks
     });
 };
+
+// Edit pending stock transaction quantity
+export const editStockTransaction = async (editData) => {
+    return API.post("/inventory/edit-transaction", editData);
+};
+
+// Approve pending stock transaction (Admin only)
+export const approveStockTransaction = async (id) => {
+    return API.post(`/inventory/approve-transaction/${id}`);
+};

@@ -20,7 +20,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import MyHistory from "./pages/MyHistory";
 import POHistory from "./pages/POHistory";
-
+import AvailableQuantity from "./pages/AvailableQuantity";
 
 // Route Guard component
 const PrivateRoute = () => {
@@ -59,6 +59,7 @@ function App() {
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/my-history" element={<MyHistory />} />
                         <Route path="/po-history" element={<POHistory />} />
+                        <Route path="/available-quantity" element={<AvailableQuantity />} />
                     </Route>
                 </Route>
 

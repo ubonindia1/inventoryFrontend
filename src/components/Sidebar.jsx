@@ -16,6 +16,7 @@ function Sidebar() {
                     { path: "/inventory", label: "Inventory" },
                     { path: "/ready-to-move", label: "Ready To Move" },
                     { path: "/purchase-orders", label: "Purchase Orders" },
+                    { path: "/available-quantity", label: "Available Quantity" },
                     { path: "/users", label: "Users" },
                     { path: "/warehouses", label: "Warehouses" },
                     { path: "/reports", label: "Reports" },
@@ -26,6 +27,7 @@ function Sidebar() {
                     { path: "/dashboard", label: "Dashboard" },
                     { path: "/inventory", label: "Inventory" },
                     { path: "/stock-entry", label: "Stock Entry" },
+                    { path: "/available-quantity", label: "Available Quantity" },
                     { path: "/my-history", label: "My History" }
                 ];
                 if (user?.can_upload_po) {
@@ -38,6 +40,7 @@ function Sidebar() {
                     { path: "/dashboard", label: "Dashboard" },
                     { path: "/inventory", label: "Inventory" },
                     { path: "/purchase-orders", label: "Purchase Orders" },
+                    { path: "/available-quantity", label: "Available Quantity" },
                     { path: "/po-history", label: "PO History" },
                     { path: "/reports", label: "Reports" }
                 ];

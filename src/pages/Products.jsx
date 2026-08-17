@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { getProducts, searchProducts, uploadProductsExcel } from "../services/productService";
+import { getProducts, searchProducts, uploadProductsExcel, createProduct, updateProduct } from "../services/productService";
 import {
     FiSearch,
     FiUploadCloud,
@@ -14,7 +14,9 @@ import {
     FiAlertCircle,
     FiCheckCircle,
     FiFileText,
-    FiGrid
+    FiGrid,
+    FiEdit,
+    FiPlus
 } from "react-icons/fi";
 import { FaAmazon } from "react-icons/fa";
 import "../css/admin.css";
@@ -35,6 +37,24 @@ function Products() {
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState("");
     const [uploadResult, setUploadResult] = useState(null);
+
+    // Modal state for Add / Edit Product (Admin only)
+    const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [productForm, setProductForm] = useState({
+        internal_model: "",
+        pieces_per_box: 1,
+        amazon_asin: "",
+        blinkit_pid: "",
+        blinkit_item_code: "",
+        flipkart_fsn: "",
+        swiggy_item_code: "",
+        meesho_catalog_id: "",
+        meesho_product_id: "",
+        zepto_sku: ""
+    });
+    const [savingProduct, setSavingProduct] = useState(false);
+    const [productFormError, setProductFormError] = useState("");
 
     // User permissions check
     const [user, setUser] = useState(null);
@@ -217,6 +237,74 @@ function Products() {
         }
     };
 
+    // Add Product Modal Handler (Admin)
+    const handleOpenAddModal = () => {
+        setEditingProduct(null);
+        setProductForm({
+            internal_model: "",
+            pieces_per_box: 1,
+            amazon_asin: "",
+            blinkit_pid: "",
+            blinkit_item_code: "",
+            flipkart_fsn: "",
+            swiggy_item_code: "",
+            meesho_catalog_id: "",
+            meesho_product_id: "",
+            zepto_sku: ""
+        });
+        setProductFormError("");
+        setIsProductModalOpen(true);
+    };
+
+    // Edit Product Modal Handler (Admin)
+    const handleOpenEditModal = (item) => {
+        setEditingProduct(item);
+        setProductForm({
+            internal_model: item.internal_model || "",
+            pieces_per_box: item.pieces_per_box || 1,
+            amazon_asin: item.amazon_asin || "",
+            blinkit_pid: item.blinkit_pid || "",
+            blinkit_item_code: item.blinkit_item_code || "",
+            flipkart_fsn: item.flipkart_fsn || "",
+            swiggy_item_code: item.swiggy_item_code || "",
+            meesho_catalog_id: item.meesho_catalog_id || "",
+            meesho_product_id: item.meesho_product_id || "",
+            zepto_sku: item.zepto_sku || ""
+        });
+        setProductFormError("");
+        setIsProductModalOpen(true);
+    };
+
+    // Save Product Handler (Admin - Create or Edit)
+    const handleSaveProduct = async (e) => {
+        e.preventDefault();
+        if (!productForm.internal_model.trim()) {
+            setProductFormError("Internal Model name is required.");
+            return;
+        }
+
+        try {
+            setSavingProduct(true);
+            setProductFormError("");
+
+            if (editingProduct) {
+                await updateProduct(editingProduct.id, productForm);
+                showToast(`✅ Product "${productForm.internal_model}" updated successfully.`);
+            } else {
+                await createProduct(productForm);
+                showToast(`✅ Product "${productForm.internal_model}" created successfully.`);
+            }
+
+            setIsProductModalOpen(false);
+            loadProductsData();
+        } catch (err) {
+            console.error("Save product error:", err);
+            setProductFormError(err.response?.data?.message || "Failed to save product.");
+        } finally {
+            setSavingProduct(false);
+        }
+    };
+
     const canManageProducts = user && (user.role === "ADMIN" || user.can_manage_products);
 
     return (
@@ -234,6 +322,34 @@ function Products() {
                 </div>
 
                 <div className="products-actions-group">
+                    {canManageProducts && (
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleOpenAddModal}
+                            style={{ background: "#4f46e5", borderColor: "#4338ca", gap: "6px" }}
+                        >
+                            <FiPlus /> Add Product
+                        </button>
+                    )}
+
+                    {canManageProducts && (
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setIsModalOpen(true)}
+                            title="Import catalog via Excel"
+                        >
+                            <FiUploadCloud /> Import Excel
+                        </button>
+                    )}
+
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleExportCSV}
+                        title="Export catalog as CSV"
+                    >
+                        <FiDownload /> Export CSV
+                    </button>
+
                     <button
                         className="btn btn-secondary"
                         onClick={() => loadProductsData(true)}
@@ -435,6 +551,7 @@ function Products() {
                                     <th style={{ textAlign: "right" }}>Stock</th>
                                     <th style={{ textAlign: "right" }}>Ready</th>
                                     <th style={{ textAlign: "center" }}>Status</th>
+                                    {canManageProducts && <th style={{ textAlign: "center" }}>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -648,6 +765,20 @@ function Products() {
                                                     {statusLabel}
                                                 </span>
                                             </td>
+
+                                            {/* Actions (Admin Only) */}
+                                            {canManageProducts && (
+                                                <td style={{ textAlign: "center" }}>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        style={{ padding: "4px 10px", fontSize: "12px", gap: "4px" }}
+                                                        onClick={() => handleOpenEditModal(item)}
+                                                        title="Edit product details & marketplace codes"
+                                                    >
+                                                        <FiEdit style={{ color: "#4f46e5" }} /> Edit
+                                                    </button>
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}
@@ -774,6 +905,169 @@ function Products() {
                                         </>
                                     ) : (
                                         "Upload & Sync Catalog"
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Add / Edit Product Modal (Admin Only) */}
+            {isProductModalOpen && (
+                <div className="modal-overlay" onClick={() => setIsProductModalOpen(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "680px" }}>
+                        <div className="modal-header">
+                            <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                {editingProduct ? (
+                                    <>
+                                        <FiEdit style={{ color: "#4f46e5" }} /> Edit Product: {editingProduct.internal_model}
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiPlus style={{ color: "#4f46e5" }} /> Add New Product
+                                    </>
+                                )}
+                            </h3>
+                            <button className="modal-close" onClick={() => setIsProductModalOpen(false)}>&times;</button>
+                        </div>
+
+                        <form onSubmit={handleSaveProduct}>
+                            <div className="modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+                                {productFormError && <div className="alert alert-error">{productFormError}</div>}
+
+                                {/* Section 1: Basic Info */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", borderBottom: "1px solid #e2e8f0", paddingBottom: "6px" }}>
+                                        📦 Basic Information
+                                    </h4>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Internal Model Name *</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. MODEL-X12"
+                                                value={productForm.internal_model}
+                                                onChange={(e) => setProductForm({ ...productForm, internal_model: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Pieces Per Box</label>
+                                            <input
+                                                type="number"
+                                                className="form-input"
+                                                placeholder="1"
+                                                min="1"
+                                                value={productForm.pieces_per_box}
+                                                onChange={(e) => setProductForm({ ...productForm, pieces_per_box: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Marketplace Mappings */}
+                                <div>
+                                    <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", borderBottom: "1px solid #e2e8f0", paddingBottom: "6px" }}>
+                                        🔗 Marketplace Mappings (ASIN, PID, FSN, SKU)
+                                    </h4>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#c2410c" }}>Amazon ASIN</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. B08N5WRWNW"
+                                                value={productForm.amazon_asin}
+                                                onChange={(e) => setProductForm({ ...productForm, amazon_asin: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#15803d" }}>Blinkit PID</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. 459102"
+                                                value={productForm.blinkit_pid}
+                                                onChange={(e) => setProductForm({ ...productForm, blinkit_pid: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#15803d" }}>Blinkit Item Code</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. BLK-881"
+                                                value={productForm.blinkit_item_code}
+                                                onChange={(e) => setProductForm({ ...productForm, blinkit_item_code: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#2563eb" }}>Flipkart FSN</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. FSNABC12345"
+                                                value={productForm.flipkart_fsn}
+                                                onChange={(e) => setProductForm({ ...productForm, flipkart_fsn: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#ea580c" }}>Swiggy Item Code</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. SWG-9921"
+                                                value={productForm.swiggy_item_code}
+                                                onChange={(e) => setProductForm({ ...productForm, swiggy_item_code: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#7c3aed" }}>Zepto SKU</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. ZEP-SKU-01"
+                                                value={productForm.zepto_sku}
+                                                onChange={(e) => setProductForm({ ...productForm, zepto_sku: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#db2777" }}>Meesho Catalog ID</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. MSH-CAT-10"
+                                                value={productForm.meesho_catalog_id}
+                                                onChange={(e) => setProductForm({ ...productForm, meesho_catalog_id: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label style={{ fontSize: "12px", fontWeight: 600, color: "#db2777" }}>Meesho Product ID</label>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="e.g. MSH-PRD-88"
+                                                value={productForm.meesho_product_id}
+                                                onChange={(e) => setProductForm({ ...productForm, meesho_product_id: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setIsProductModalOpen(false)}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={savingProduct}>
+                                    {savingProduct ? (
+                                        <>
+                                            <FiRefreshCw className="spin-animation" /> Saving...
+                                        </>
+                                    ) : (
+                                        editingProduct ? "Save Changes" : "Create Product"
                                     )}
                                 </button>
                             </div>

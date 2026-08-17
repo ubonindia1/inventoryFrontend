@@ -17,3 +17,11 @@ export const uploadProductsExcel = async (file) => {
         }
     });
 };
+
+export const createProduct = async (productData) => {
+    return await API.post("/products", productData);
+};
+
+export const updateProduct = async (id, productData) => {
+    return await API.put(`/products/${id}`, productData);
+};

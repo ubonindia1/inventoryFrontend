@@ -42,8 +42,14 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
             }
         };
 
-        // Close on scroll so the floating portal stays in sync
-        const handleScroll = () => setIsOpen(false);
+        // Close on scroll ONLY if the scroll happened OUTSIDE the dropdown portal.
+        // This lets users scroll through the filtered results list without it closing.
+        const handleScroll = (event) => {
+            if (dropdownRef.current && dropdownRef.current.contains(event.target)) {
+                return; // scroll is inside the dropdown list — keep it open
+            }
+            setIsOpen(false);
+        };
 
         document.addEventListener("mousedown", handleClickOutside);
         window.addEventListener("scroll", handleScroll, true);

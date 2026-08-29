@@ -277,13 +277,49 @@
     overflow: hidden;
 }
 
+/*
+ * Single scroll wrapper handles BOTH axes.
+ * max-height = viewport minus header/controls above the table (~320px).
+ * This means the table is a fixed-height window — the horizontal scrollbar
+ * always sits at the bottom of the visible area, never off-screen.
+ */
 .table-scroll-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: calc(100vh - 320px);
     width: 100%;
+    border-radius: 14px 14px 0 0;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+/* Vertical scrollbar */
+.table-scroll-wrapper::-webkit-scrollbar {
+    width: 7px;
+    height: 9px;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 4px;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* Corner between vertical + horizontal scrollbars */
+.table-scroll-wrapper::-webkit-scrollbar-corner {
+    background: #f1f5f9;
 }
 
 .products-table {
     width: 100%;
+    min-width: 1400px;
     border-collapse: separate;
     border-spacing: 0;
     font-size: 13.5px;

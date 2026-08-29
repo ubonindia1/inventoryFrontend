@@ -1,11 +1,43 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { getUser } from "../utils/auth";
 import "../css/sidebar.css";
 
+const ICONS = {
+    "/dashboard": "📊",
+    "/products": "📦",
+    "/inventory": "🏭",
+    "/ready-to-move": "🚚",
+    "/purchase-orders": "📋",
+    "/available-quantity": "📈",
+    "/users": "👥",
+    "/warehouses": "🏢",
+    "/reports": "📑",
+    "/settings": "⚙️",
+    "/stock-entry": "✏️",
+    "/my-history": "🕐",
+    "/po-history": "📜",
+};
+
 function Sidebar() {
     const user = getUser();
     const role = user?.role ? user.role.toUpperCase().replace(/\s+/g, "_") : "";
+
+    const [collapsed, setCollapsed] = useState(() => {
+        try {
+            return localStorage.getItem("sidebar_collapsed") === "true";
+        } catch {
+            return false;
+        }
+    });
+
+    const toggleSidebar = () => {
+        setCollapsed(prev => {
+            const next = !prev;
+            try { localStorage.setItem("sidebar_collapsed", String(next)); } catch {}
+            return next;
+        });
+    };
 
     const getMenuItems = () => {
         switch (role) {
@@ -52,16 +84,29 @@ function Sidebar() {
     const menuItems = getMenuItems();
 
     return (
-        <div className="sidebar">
-            <h2>Inventory ERP</h2>
+        <div className={`sidebar${collapsed ? " sidebar-collapsed" : ""}`}>
+            {/* Hamburger toggle button */}
+            <button
+                className="sidebar-toggle"
+                onClick={toggleSidebar}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+                {collapsed ? "☰" : "✕"}
+            </button>
+
+            {/* Brand title — hidden when collapsed */}
+            {!collapsed && <h2 className="sidebar-brand">Inventory ERP</h2>}
+
             <ul>
                 {menuItems.map((item) => (
                     <li key={item.path}>
-                        <NavLink 
-                            to={item.path} 
+                        <NavLink
+                            to={item.path}
                             className={({ isActive }) => isActive ? "active" : ""}
+                            title={collapsed ? item.label : undefined}
                         >
-                            {item.label}
+                            <span className="nav-icon">{ICONS[item.path] || "•"}</span>
+                            {!collapsed && <span className="nav-label">{item.label}</span>}
                         </NavLink>
                     </li>
                 ))}

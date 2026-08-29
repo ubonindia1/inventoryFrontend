@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { getProducts, searchProducts, uploadProductsExcel, createProduct, updateProduct } from "../services/productService";
 import {
     FiSearch,
@@ -58,6 +58,9 @@ function Products() {
 
     // User permissions check
     const [user, setUser] = useState(null);
+
+    // Ref for the products table scroll wrapper (handles both X and Y scroll)
+    const tableScrollRef = useRef(null);
 
     useEffect(() => {
         const storedUser = localStorage.getItem("user");
@@ -503,7 +506,7 @@ function Products() {
                         </p>
                     </div>
                 ) : (
-                    <div className="table-scroll-wrapper">
+                    <div className="table-scroll-wrapper" ref={tableScrollRef}>
                         <table className="products-table">
                             <thead>
                                 <tr>

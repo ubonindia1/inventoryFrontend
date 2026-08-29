@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { getProducts, searchProducts, uploadProductsExcel, createProduct, updateProduct } from "../services/productService";
+import { getProducts, searchProducts, uploadProductsExcel, exportProductsExcel, createProduct, updateProduct } from "../services/productService";
 import {
     FiSearch,
     FiUploadCloud,
@@ -211,6 +211,28 @@ function Products() {
         showToast("Products CSV exported successfully!");
     };
 
+    // Excel Export functionality
+    const handleExportExcel = async () => {
+        try {
+            showToast("Generating Excel file...");
+            const response = await exportProductsExcel();
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", `Products_Catalog_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            if (link.parentNode) {
+                link.parentNode.removeChild(link);
+            }
+            window.URL.revokeObjectURL(url);
+            showToast("Products Excel exported successfully!");
+        } catch (err) {
+            console.error("Export Excel error:", err);
+            showToast("Failed to export Excel file.");
+        }
+    };
+
     // Excel Upload Handler
     const handleFileUpload = async (e) => {
         e.preventDefault();
@@ -344,6 +366,14 @@ function Products() {
                             <FiUploadCloud /> Import Excel
                         </button>
                     )}
+
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleExportExcel}
+                        title="Export product catalog as Excel spreadsheet (.xlsx)"
+                    >
+                        <FiDownload style={{ color: "#10b981" }} /> Export Excel
+                    </button>
 
                     <button
                         className="btn btn-secondary"
@@ -828,8 +858,8 @@ function Products() {
                             <div className="modal-body">
                                 {uploadError && <div className="alert alert-error">{uploadError}</div>}
 
-                                <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
-                                    Upload an Excel sheet (<code>.xlsx</code> or <code>.xls</code>) containing internal models and marketplace codes to bulk import or update mappings.
+                                <p style={{ fontSize: "13px", color: "#475569", marginBottom: "14px", lineHeight: "1.5" }}>
+                                    Upload an Excel sheet (<code>.xlsx</code> or <code>.xls</code>) to import or update product models. The system automatically searches by <strong>Internal Model</strong>: if found, it <strong>updates only provided columns</strong> (preserving all existing DB mappings); if not found, a <strong>new entry</strong> is created.
                                 </p>
 
                                 <div

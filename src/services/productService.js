@@ -25,3 +25,9 @@ export const createProduct = async (productData) => {
 export const updateProduct = async (id, productData) => {
     return await API.put(`/products/${id}`, productData);
 };
+
+export const exportProductsExcel = async () => {
+    return await API.get("/products/export", {
+        responseType: "blob"
+    });
+};

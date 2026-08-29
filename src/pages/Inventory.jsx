@@ -273,23 +273,26 @@ function Inventory() {
                 >
                     📦 View Inventory
                 </button>
-                <button
-                    onClick={() => setActiveTab("shift")}
-                    style={{
-                        padding: "10px 22px",
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: "14px",
-                        color: activeTab === "shift" ? "#4f46e5" : "#64748b",
-                        borderBottom: activeTab === "shift" ? "2px solid #4f46e5" : "2px solid transparent",
-                        marginBottom: "-2px",
-                        transition: "all 0.2s",
-                    }}
-                >
-                    🔄 Shift Stock
-                </button>
+                {/* Shift Stock tab — Admin only */}
+                {isAdmin && (
+                    <button
+                        onClick={() => setActiveTab("shift")}
+                        style={{
+                            padding: "10px 22px",
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: "14px",
+                            color: activeTab === "shift" ? "#4f46e5" : "#64748b",
+                            borderBottom: activeTab === "shift" ? "2px solid #4f46e5" : "2px solid transparent",
+                            marginBottom: "-2px",
+                            transition: "all 0.2s",
+                        }}
+                    >
+                        🔄 Shift Stock
+                    </button>
+                )}
             </div>
 
             {/* === VIEW INVENTORY TAB === */}
@@ -411,8 +414,8 @@ function Inventory() {
                 </div>
             )}
 
-            {/* === SHIFT STOCK TAB === */}
-            {activeTab === "shift" && (
+            {/* === SHIFT STOCK TAB — Admin only === */}
+            {activeTab === "shift" && isAdmin && (
                 <div className="section" style={{ marginTop: 0 }}>
                     <div style={{
                         background: "linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%)",

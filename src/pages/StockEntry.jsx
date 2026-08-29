@@ -37,7 +37,7 @@ function StockEntry() {
     const [allowedWarehouses, setAllowedWarehouses] = useState([]);
     const [products, setProducts] = useState([]);
     const [warehouseId, setWarehouseId] = useState("");
-    const [rows, setRows] = useState([newRow()]);
+    const [rows, setRows] = useState(() => Array.from({ length: 20 }, () => newRow()));
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -138,7 +138,7 @@ function StockEntry() {
         }));
     };
 
-    const addRow = () => setRows(prev => [...prev, newRow()]);
+    const addRow = () => setRows(prev => [...prev, ...Array.from({ length: 20 }, () => newRow())]);
 
     const removeRow = (rowId) => {
         if (rows.length > 1) setRows(prev => prev.filter(r => r.id !== rowId));
@@ -177,7 +177,7 @@ function StockEntry() {
             }
 
             setSuccess(`Stock entry saved successfully for ${valid.length} product(s)!`);
-            setRows([newRow()]);
+            setRows(Array.from({ length: 20 }, () => newRow()));
             setTimeout(() => setSuccess(""), 4000);
         } catch (err) {
             setError(err.response?.data?.message || "Failed to save stock entries.");
@@ -238,18 +238,21 @@ function StockEntry() {
 
             {/* Multi-Row Table */}
             <div className="section" style={{ marginTop: 0 }}>
-                <table>
-                    <thead>
-                        <tr>
-                            <th style={{ width: "36px" }}>#</th>
-                            {canAdjustStock && <th style={{ width: "140px", textAlign: "center" }}>Operation</th>}
-                            <th>Product Model (Type to Search)</th>
-                            <th style={{ width: "150px", textAlign: "center" }}>No. of Boxes</th>
-                            <th style={{ width: "180px", textAlign: "center" }}>Calculated Pieces</th>
-                            <th style={{ width: "48px" }}></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                {/* Scrollable table wrapper — fixed height so 20 rows scroll */}
+                <div style={{ overflowX: "auto" }}>
+                    <div style={{ overflowY: "auto", maxHeight: "520px", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+                        <table style={{ minWidth: "700px" }}>
+                            <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "#f8fafc" }}>
+                                <tr>
+                                    <th style={{ width: "36px" }}>#</th>
+                                    {canAdjustStock && <th style={{ width: "140px", textAlign: "center" }}>Operation</th>}
+                                    <th>Product Model (Type to Search)</th>
+                                    <th style={{ width: "150px", textAlign: "center" }}>No. of Boxes</th>
+                                    <th style={{ width: "180px", textAlign: "center" }}>Calculated Pieces</th>
+                                    <th style={{ width: "48px" }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
                         {rows.map((row, index) => {
                             const prod = getProduct(row.product_id);
                             const isOut = row.type === "OUT";
@@ -382,50 +385,52 @@ function StockEntry() {
                                 </tr>
                             );
                         })}
-                    </tbody>
-                    <tfoot>
-                        <tr style={{ background: "#f1f5f9", borderTop: "2px solid #e2e8f0" }}>
-                            <td colSpan={canAdjustStock ? 3 : 2} style={{ padding: "12px 16px", fontWeight: 700, color: "#374151", fontSize: "14px" }}>
-                                TOTAL SUMMARY
-                            </td>
-                            <td style={{ padding: "12px", textAlign: "center" }}>
-                                {totalInBoxes > 0 && (
-                                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#16a34a" }}>
-                                        + {totalInBoxes} <span style={{ fontSize: "11px", color: "#64748b" }}>boxes (IN)</span>
-                                    </div>
-                                )}
-                                {totalOutBoxes > 0 && (
-                                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
-                                        - {totalOutBoxes} <span style={{ fontSize: "11px", color: "#64748b" }}>boxes (OUT)</span>
-                                    </div>
-                                )}
-                                {totalInBoxes === 0 && totalOutBoxes === 0 && (
-                                    <span style={{ color: "#94a3b8", fontSize: "13px" }}>0.00 boxes</span>
-                                )}
-                            </td>
-                            <td style={{ padding: "12px", textAlign: "center" }}>
-                                {totalInPieces > 0 && (
-                                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#16a34a" }}>
-                                        + {totalInPieces} <span style={{ fontSize: "11px", color: "#64748b" }}>pieces (IN)</span>
-                                    </div>
-                                )}
-                                {totalOutPieces > 0 && (
-                                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
-                                        - {totalOutPieces} <span style={{ fontSize: "11px", color: "#64748b" }}>pieces (OUT)</span>
-                                    </div>
-                                )}
-                                {totalInPieces === 0 && totalOutPieces === 0 && (
-                                    <span style={{ color: "#94a3b8", fontSize: "13px" }}>0 pieces</span>
-                                )}
-                            </td>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
+                            </tbody>
+                            <tfoot>
+                                <tr style={{ background: "#f1f5f9", borderTop: "2px solid #e2e8f0" }}>
+                                    <td colSpan={canAdjustStock ? 3 : 2} style={{ padding: "12px 16px", fontWeight: 700, color: "#374151", fontSize: "14px" }}>
+                                        TOTAL SUMMARY
+                                    </td>
+                                    <td style={{ padding: "12px", textAlign: "center" }}>
+                                        {totalInBoxes > 0 && (
+                                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#16a34a" }}>
+                                                + {totalInBoxes} <span style={{ fontSize: "11px", color: "#64748b" }}>boxes (IN)</span>
+                                            </div>
+                                        )}
+                                        {totalOutBoxes > 0 && (
+                                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
+                                                - {totalOutBoxes} <span style={{ fontSize: "11px", color: "#64748b" }}>boxes (OUT)</span>
+                                            </div>
+                                        )}
+                                        {totalInBoxes === 0 && totalOutBoxes === 0 && (
+                                            <span style={{ color: "#94a3b8", fontSize: "13px" }}>0.00 boxes</span>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: "12px", textAlign: "center" }}>
+                                        {totalInPieces > 0 && (
+                                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#16a34a" }}>
+                                                + {totalInPieces} <span style={{ fontSize: "11px", color: "#64748b" }}>pieces (IN)</span>
+                                            </div>
+                                        )}
+                                        {totalOutPieces > 0 && (
+                                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#dc2626" }}>
+                                                - {totalOutPieces} <span style={{ fontSize: "11px", color: "#64748b" }}>pieces (OUT)</span>
+                                            </div>
+                                        )}
+                                        {totalInPieces === 0 && totalOutPieces === 0 && (
+                                            <span style={{ color: "#94a3b8", fontSize: "13px" }}>0 pieces</span>
+                                        )}
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px", gap: "12px", flexWrap: "wrap" }}>
                     <button type="button" className="btn btn-secondary" onClick={addRow}>
-                        + Add Row
+                        + Add 20 More Rows
                     </button>
                     <button
                         type="button"

@@ -72,21 +72,31 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
         setIsOpen(prev => !prev);
     };
 
-    const filteredProducts = products.filter(p => {
+    // Safe string helper: converts any value to lowercase string (handles null/number/undefined from server)
+    const safeStr = (val) => (val == null ? "" : String(val).toLowerCase());
+
+    let filteredProducts = products;
+    try {
         const query = search.toLowerCase().trim();
-        if (!query) return true;
-        return (
-            (p.internal_model && p.internal_model.toLowerCase().includes(query)) ||
-            (p.amazon_asin && p.amazon_asin.toLowerCase().includes(query)) ||
-            (p.blinkit_pid && p.blinkit_pid.toLowerCase().includes(query)) ||
-            (p.blinkit_item_code && p.blinkit_item_code.toLowerCase().includes(query)) ||
-            (p.flipkart_fsn && p.flipkart_fsn.toLowerCase().includes(query)) ||
-            (p.swiggy_item_code && p.swiggy_item_code.toLowerCase().includes(query)) ||
-            (p.meesho_catalog_id && p.meesho_catalog_id.toLowerCase().includes(query)) ||
-            (p.meesho_product_id && p.meesho_product_id.toLowerCase().includes(query)) ||
-            (p.zepto_sku && p.zepto_sku.toLowerCase().includes(query))
-        );
-    });
+        if (query) {
+            filteredProducts = products.filter(p => {
+                return (
+                    safeStr(p.internal_model).includes(query) ||
+                    safeStr(p.amazon_asin).includes(query) ||
+                    safeStr(p.blinkit_pid).includes(query) ||
+                    safeStr(p.blinkit_item_code).includes(query) ||
+                    safeStr(p.flipkart_fsn).includes(query) ||
+                    safeStr(p.swiggy_item_code).includes(query) ||
+                    safeStr(p.meesho_catalog_id).includes(query) ||
+                    safeStr(p.meesho_product_id).includes(query) ||
+                    safeStr(p.zepto_sku).includes(query)
+                );
+            });
+        }
+    } catch (err) {
+        console.error("SearchableProductSelect filter error:", err);
+        filteredProducts = products; // fallback: show all products on error
+    }
 
     const handleSelect = (productId) => {
         onChange(String(productId));
@@ -169,7 +179,7 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
                             >
                                 <div>
                                     <div style={{ fontWeight: isSelected ? 700 : 500, fontSize: "13px", color: isSelected ? "#4f46e5" : "#1e293b" }}>
-                                        {p.internal_model}
+                                        {p.internal_model ?? <em style={{ color: "#94a3b8" }}>No Model Name</em>}
                                     </div>
                                     {p.amazon_asin && (
                                         <div style={{ fontSize: "11px", color: "#64748b" }}>ASIN: {p.amazon_asin}</div>
@@ -230,7 +240,7 @@ function SearchableProductSelect({ products = [], value, onChange, placeholder =
                 <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {selectedProduct ? (
                         <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                            {selectedProduct.internal_model}
+                            {selectedProduct.internal_model ?? "(No Model Name)"}
                             {selectedProduct.pieces_per_box > 1 && (
                                 <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "6px", fontWeight: 400 }}>
                                     ({selectedProduct.pieces_per_box} pcs/box)

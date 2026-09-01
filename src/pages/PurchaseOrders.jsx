@@ -60,15 +60,12 @@ const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageErro
         : (!isAdmin || poData.status === "APPROVED" || poData.status === "CANCELLED");
 
     // editedQtys: { [item.id]: number }
-    // In edit mode: Auto-fills up to required_quantity if new stock is available in DB.
+    // In edit mode: Uses assigned_quantity, allowing users to manually increase it.
     // In view mode: Uses assigned_quantity for pending/approved POs.
     const [editedQtys, setEditedQtys] = useState(() => {
         const init = {};
         for (const item of poData.items) {
-            if (isEditMode) {
-                const maxAvailableFromDB = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
-                init[item.id] = Math.min(Number(item.required_quantity || 0), maxAvailableFromDB);
-            } else if (isPendingOrDone) {
+            if (isEditMode || isPendingOrDone) {
                 init[item.id] = Number(item.assigned_quantity || 0);
             } else {
                 init[item.id] = Number(item.required_quantity || 0);
@@ -91,21 +88,44 @@ const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageErro
     };
 
     // Check if any item quantity exceeds available stock in DB
-    const hasStockError = isEditMode && poData.items.some(item => {
-        const maxAvail = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
-        const entered = editedQtys[item.id] ?? Math.min(Number(item.required_quantity || 0), maxAvail);
-        return entered > maxAvail;
-    });
+    const hasStockError = isEditMode && (() => {
+        const productUsage = {};
+        for (const item of poData.items) {
+            if (productUsage[item.product_id] === undefined) {
+                const totalAssignedForProduct = poData.items.filter(i => i.product_id === item.product_id).reduce((sum, i) => sum + Number(i.assigned_quantity || 0), 0);
+                productUsage[item.product_id] = {
+                    maxAvail: totalAssignedForProduct + Number(item.current_stock || 0),
+                    used: 0
+                };
+            }
+            const entered = editedQtys[item.id] ?? Number(item.assigned_quantity || 0);
+            productUsage[item.product_id].used += entered;
+            
+            if (productUsage[item.product_id].used > productUsage[item.product_id].maxAvail) {
+                return true;
+            }
+        }
+        return false;
+    })();
 
     const handleSave = async () => {
         if (isReadOnly) return;
 
         if (isEditMode) {
+            const productUsage = {};
             for (const item of poData.items) {
-                const maxAvail = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
-                const entered = editedQtys[item.id] ?? Math.min(Number(item.required_quantity || 0), maxAvail);
-                if (entered > maxAvail) {
-                    setModalError(`❌ Cannot save: Quantity for "${item.internal_model}" (${entered}) exceeds total available stock in DB (${maxAvail}).`);
+                if (productUsage[item.product_id] === undefined) {
+                    const totalAssignedForProduct = poData.items.filter(i => i.product_id === item.product_id).reduce((sum, i) => sum + Number(i.assigned_quantity || 0), 0);
+                    productUsage[item.product_id] = {
+                        maxAvail: totalAssignedForProduct + Number(item.current_stock || 0),
+                        used: 0
+                    };
+                }
+                const entered = editedQtys[item.id] ?? Number(item.assigned_quantity || 0);
+                productUsage[item.product_id].used += entered;
+
+                if (productUsage[item.product_id].used > productUsage[item.product_id].maxAvail) {
+                    setModalError(`❌ Cannot save: Total quantity for "${item.internal_model}" (${productUsage[item.product_id].used}) exceeds total available stock in DB (${productUsage[item.product_id].maxAvail}).`);
                     return;
                 }
             }
@@ -185,7 +205,7 @@ const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageErro
 
                     <table>
                         <thead>
-                            <tr>
+                            <tr style={{ background: "#f8fafc", color: "#475569", fontSize: "13px", textTransform: "uppercase" }}>
                                 <th>#</th>
                                 <th>Product</th>
                                 <th style={{ textAlign: "center" }}>Required Qty</th>
@@ -196,15 +216,21 @@ const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageErro
                         <tbody>
                             {poData.items.length === 0 ? (
                                 <tr><td colSpan="5" style={{ textAlign: "center", color: "#64748b" }}>No items in this PO.</td></tr>
-                            ) : (
-                                poData.items.map((item, idx) => {
-                                    const maxAvailableFromDB = Number(item.assigned_quantity || 0) + Number(item.current_stock || 0);
+                            ) : (() => {
+                                const runningTotals = {};
+                                return poData.items.map((item, idx) => {
+                                    const maxAvailForProduct = poData.items.filter(i => i.product_id === item.product_id).reduce((sum, i) => sum + Number(i.assigned_quantity || 0), 0) + Number(item.current_stock || 0);
+                                    
                                     const maxQty = Number(item.required_quantity || 0);
-                                    const approved = editedQtys[item.id] ?? (isEditMode ? Math.min(Number(item.required_quantity || 0), maxAvailableFromDB) : (isPendingOrDone ? Number(item.assigned_quantity || 0) : Number(item.required_quantity || 0)));
+                                    const approved = editedQtys[item.id] ?? Number(item.assigned_quantity || 0);
+                                    
+                                    runningTotals[item.product_id] = (runningTotals[item.product_id] || 0) + approved;
+                                    
                                     const isReduced = isPendingOrDone && approved < item.assigned_quantity;
                                     const isIncreased = isPendingOrDone && approved > item.assigned_quantity;
-                                    const isExceeding = approved > maxAvailableFromDB;
+                                    const isExceeding = runningTotals[item.product_id] > maxAvailForProduct;
                                     const isShort = !isPendingOrDone && item.current_stock < item.required_quantity;
+                                    
                                     return (
                                         <tr key={item.id} style={isExceeding || isShort ? { background: "#fef2f2" } : {}}>
                                             <td style={{ color: "#94a3b8" }}>{idx + 1}</td>
@@ -260,15 +286,15 @@ const ReviewModal = ({ poData, isEditMode = false, onClose, onSaved, setPageErro
                                                     </div>
                                                     {isExceeding && (
                                                         <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: 700 }}>
-                                                            ⚠️ Exceeds DB stock (Max: {maxAvailableFromDB})
+                                                            ⚠️ Exceeds DB stock (Max: {maxAvailForProduct})
                                                         </span>
                                                     )}
                                                 </div>
                                             </td>
                                         </tr>
                                     );
-                                })
-                            )}
+                                });
+                            })()}
                         </tbody>
                     </table>
                 </div>
